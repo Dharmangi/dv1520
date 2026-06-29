@@ -49,4 +49,10 @@ class Person {
         if (tokenNo != null) 'tokenNo': tokenNo,
         if (place != null) 'place': place,
       };
+
+  @override
+  bool operator ==(Object other) => other is Person && other.id == id;
+
+  @override
+  int get hashCode => id.hashCode;
 }

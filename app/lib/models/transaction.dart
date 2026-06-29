@@ -11,6 +11,7 @@ class Txn {
     required this.date,
     this.categoryId,
     this.categoryName,
+    this.status = 'confirmed',
   });
 
   final String id;
@@ -24,6 +25,9 @@ class Txn {
   final DateTime date;
   final String? categoryId;
   final String? categoryName;
+  final String status; // 'pending' | 'confirmed'
+
+  bool get isPending => status == 'pending';
 
   factory Txn.fromJson(Map<String, dynamic> json) {
     final person = json['personId'];
@@ -40,6 +44,7 @@ class Txn {
       date: DateTime.parse(json['date'] as String),
       categoryId: category is Map ? category['_id'] as String? : category as String?,
       categoryName: category is Map ? category['name'] as String? : null,
+      status: json['status'] as String? ?? 'confirmed',
     );
   }
 

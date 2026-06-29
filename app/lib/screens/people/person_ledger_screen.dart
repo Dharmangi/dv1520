@@ -8,6 +8,10 @@ import '../../providers/people_provider.dart';
 import '../../providers/transactions_provider.dart';
 import '../transactions/add_transaction_sheet.dart';
 
+int _balanceOf(List<Txn> txns) => txns
+    .where((t) => !t.isPending)
+    .fold<int>(0, (sum, t) => sum + (t.type == 'received' ? t.amount : -t.amount));
+
 class PersonLedgerScreen extends ConsumerWidget {
   const PersonLedgerScreen({super.key, required this.person});
 
@@ -15,6 +19,10 @@ class PersonLedgerScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    if (person.isOwner) {
+      return _OwnerLedgerView(owner: person);
+    }
+
     final txnsAsync = ref.watch(personTransactionsProvider(person.id));
 
     return Scaffold(
@@ -26,57 +34,21 @@ class PersonLedgerScreen extends ConsumerWidget {
       ),
       body: txnsAsync.when(
         data: (txns) {
-          final balance = txns.fold<int>(
-            0,
-            (sum, t) => sum + (t.type == 'received' ? t.amount : -t.amount),
-          );
+          final balance = _balanceOf(txns);
 
           return ListView(
             children: [
-              Card(
-                margin: const EdgeInsets.all(16),
-                color: Theme.of(context).colorScheme.primaryContainer,
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Balance', style: Theme.of(context).textTheme.titleMedium),
-                      const SizedBox(height: 8),
-                      Text(
-                        formatRupees(balance),
-                        style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+              _BalanceCard(label: 'Balance', amount: balance),
               if (txns.isEmpty)
                 const Padding(
                   padding: EdgeInsets.symmetric(vertical: 24),
                   child: Center(child: Text('No transactions with this person yet.')),
                 )
               else
-                ...txns.map((t) => ListTile(
-                      leading: CircleAvatar(
-                        backgroundColor: t.type == 'received' ? Colors.green.shade100 : Colors.red.shade100,
-                        child: Icon(
-                          t.type == 'received' ? Icons.arrow_downward : Icons.arrow_upward,
-                          color: t.type == 'received' ? Colors.green : Colors.red,
-                        ),
-                      ),
-                      title: Text(t.description ?? t.paymentMode),
-                      subtitle: Text('${t.date.day}/${t.date.month}/${t.date.year}'),
-                      trailing: Text(
-                        formatRupees(t.amount),
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: t.type == 'received' ? Colors.green : Colors.red,
-                        ),
-                      ),
-                      onLongPress: () => _handleTransactionLongPress(context, ref, t),
+                ...txns.map((t) => _TransactionTile(
+                      txn: t,
+                      onLongPress: () => _handleTransactionLongPress(context, ref, person, t),
                     )),
-              if (person.isOwner) _OwnerCustomersSection(owner: person),
             ],
           );
         },
@@ -85,23 +57,23 @@ class PersonLedgerScreen extends ConsumerWidget {
       ),
     );
   }
+}
 
-  Future<void> _handleTransactionLongPress(BuildContext context, WidgetRef ref, Txn txn) async {
-    final choice = await showEditDeleteMenu(context);
-    if (choice == 'edit') {
-      if (context.mounted) showAddTransactionSheet(context, initialPerson: person, existing: txn);
-    } else if (choice == 'delete') {
-      if (!context.mounted) return;
-      final confirmed = await confirmDelete(context, message: 'Delete this transaction?');
-      if (confirmed) {
-        await ref.read(transactionsProvider.notifier).deleteTransaction(txn);
-      }
+Future<void> _handleTransactionLongPress(BuildContext context, WidgetRef ref, Person person, Txn txn) async {
+  final choice = await showEditDeleteMenu(context);
+  if (choice == 'edit') {
+    if (context.mounted) showAddTransactionSheet(context, initialPerson: person, existing: txn);
+  } else if (choice == 'delete') {
+    if (!context.mounted) return;
+    final confirmed = await confirmDelete(context, message: 'Delete this transaction?');
+    if (confirmed) {
+      await ref.read(transactionsProvider.notifier).deleteTransaction(txn);
     }
   }
 }
 
-class _OwnerCustomersSection extends ConsumerWidget {
-  const _OwnerCustomersSection({required this.owner});
+class _OwnerLedgerView extends ConsumerWidget {
+  const _OwnerLedgerView({required this.owner});
 
   final Person owner;
 
@@ -109,38 +81,142 @@ class _OwnerCustomersSection extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final ledgerAsync = ref.watch(ownerLedgerProvider(owner.id));
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 24, 16, 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('Customers under ${owner.name}', style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 8),
-          ledgerAsync.when(
-            data: (ledger) {
-              if (ledger.customers.isEmpty) {
-                return const Text('No customers under this owner yet.');
-              }
-              return Column(
-                children: ledger.customers
-                    .map((c) => ListTile(
-                          contentPadding: EdgeInsets.zero,
-                          leading: CircleAvatar(child: Text(c.name.isNotEmpty ? c.name[0].toUpperCase() : '?')),
-                          title: Text(c.name),
-                          subtitle: Text(c.mobile ?? 'Customer'),
-                          trailing: const Icon(Icons.chevron_right),
-                          onTap: () => Navigator.of(context).push(
-                            MaterialPageRoute(builder: (_) => PersonLedgerScreen(person: c)),
-                          ),
-                        ))
-                    .toList(),
-              );
-            },
-            loading: () => const Center(child: CircularProgressIndicator()),
-            error: (e, _) => Text('Failed to load: $e'),
-          ),
-        ],
+    return Scaffold(
+      appBar: AppBar(title: Text(owner.name)),
+      floatingActionButton: FloatingActionButton(
+        heroTag: 'ledger_fab',
+        onPressed: () => showAddTransactionSheet(context, initialPerson: owner),
+        child: const Icon(Icons.add),
       ),
+      body: ledgerAsync.when(
+        data: (ledger) {
+          final ownTxns = ledger.transactions.where((t) => t.personId == owner.id).toList();
+          final ownBalance = _balanceOf(ownTxns);
+          final groupBalance = _balanceOf(ledger.transactions);
+
+          return ListView(
+            children: [
+              _BalanceCard(label: "${owner.name}'s Balance", amount: ownBalance),
+              _BalanceCard(label: 'Group Balance', amount: groupBalance, highlighted: true),
+              const SizedBox(height: 8),
+              if (ledger.transactions.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 24),
+                  child: Center(child: Text('No transactions yet.')),
+                )
+              else
+                ...ledger.transactions.map((t) => _TransactionTile(
+                      txn: t,
+                      showPersonName: true,
+                      onLongPress: () => _handleTransactionLongPress(
+                        context,
+                        ref,
+                        t.personId == owner.id ? owner : ledger.customers.firstWhere((c) => c.id == t.personId),
+                        t,
+                      ),
+                    )),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 24, 16, 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Customers under ${owner.name}', style: Theme.of(context).textTheme.titleMedium),
+                    const SizedBox(height: 8),
+                    if (ledger.customers.isEmpty)
+                      const Text('No customers under this owner yet.')
+                    else
+                      ...ledger.customers.map((c) => ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            leading: CircleAvatar(child: Text(c.name.isNotEmpty ? c.name[0].toUpperCase() : '?')),
+                            title: Text(c.name),
+                            subtitle: Text(c.mobile ?? 'Customer'),
+                            trailing: const Icon(Icons.chevron_right),
+                            onTap: () => Navigator.of(context).push(
+                              MaterialPageRoute(builder: (_) => PersonLedgerScreen(person: c)),
+                            ),
+                          )),
+                  ],
+                ),
+              ),
+            ],
+          );
+        },
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (e, _) => Center(child: Text('Failed to load: $e')),
+      ),
+    );
+  }
+}
+
+class _BalanceCard extends StatelessWidget {
+  const _BalanceCard({required this.label, required this.amount, this.highlighted = false});
+
+  final String label;
+  final int amount;
+  final bool highlighted;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+      color: highlighted ? Theme.of(context).colorScheme.primaryContainer : null,
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(label, style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 8),
+            Text(
+              formatRupees(amount),
+              style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TransactionTile extends StatelessWidget {
+  const _TransactionTile({required this.txn, this.showPersonName = false, this.onLongPress});
+
+  final Txn txn;
+  final bool showPersonName;
+  final VoidCallback? onLongPress;
+
+  @override
+  Widget build(BuildContext context) {
+    final subtitleParts = [
+      if (showPersonName) txn.personName ?? 'Unknown',
+      txn.description ?? txn.paymentMode,
+      '${txn.date.day}/${txn.date.month}/${txn.date.year}',
+    ];
+
+    return ListTile(
+      leading: CircleAvatar(
+        backgroundColor: txn.isPending
+            ? Colors.orange.shade100
+            : (txn.type == 'received' ? Colors.green.shade100 : Colors.red.shade100),
+        child: Icon(
+          txn.isPending
+              ? Icons.hourglass_empty
+              : (txn.type == 'received' ? Icons.arrow_downward : Icons.arrow_upward),
+          color: txn.isPending ? Colors.orange.shade800 : (txn.type == 'received' ? Colors.green : Colors.red),
+        ),
+      ),
+      title: Text(showPersonName ? (txn.personName ?? 'Unknown') : (txn.description ?? txn.paymentMode)),
+      subtitle: Text(
+        (txn.isPending ? 'Pending · ' : '') + subtitleParts.skip(showPersonName ? 1 : 0).join(' · '),
+      ),
+      trailing: Text(
+        formatRupees(txn.amount),
+        style: TextStyle(
+          fontWeight: FontWeight.bold,
+          color: txn.isPending ? Colors.orange.shade800 : (txn.type == 'received' ? Colors.green : Colors.red),
+        ),
+      ),
+      onLongPress: txn.isPending ? null : onLongPress,
     );
   }
 }

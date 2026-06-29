@@ -17,8 +17,8 @@ class ApiClient {
 
   static const String _baseUrlPrefKey = 'api_base_url';
 
-  // Use 10.0.2.2 for the Android emulator, or 127.0.0.1 with `adb reverse tcp:4000 tcp:4000` for a USB-connected device.
-  static const String defaultBaseUrl = 'http://10.0.2.2:4000/api';
+  // Use 10.0.2.2 for the Android emulator, or your computer's LAN IP for a Wi-Fi connected device.
+  static const String defaultBaseUrl = 'http://192.168.1.6:4000/api';
   static const String apiKey = 'dv1520-9f3a7c1e4b2d6f8a0c5e9b3d7f1a4c8e';
 
   late final Dio _dio;

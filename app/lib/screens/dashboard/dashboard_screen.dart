@@ -48,7 +48,7 @@ class DashboardScreen extends ConsumerWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text('Customers', style: Theme.of(context).textTheme.titleMedium),
+                Text('Owners', style: Theme.of(context).textTheme.titleMedium),
                 IconButton(
                   icon: const Icon(Icons.person_add_outlined),
                   onPressed: () => showAddPersonSheet(context),
@@ -60,24 +60,39 @@ class DashboardScreen extends ConsumerWidget {
                 if (people.isEmpty) {
                   return const Padding(
                     padding: EdgeInsets.symmetric(vertical: 24),
-                    child: Center(child: Text('No customers yet. Tap + to add one.')),
+                    child: Center(child: Text('No people yet. Tap + to add one.')),
                   );
                 }
+                final owners = people.where((p) => p.isOwner).toList();
+                final others = people.where((p) => !p.isOwner && p.ownerId == null).toList();
+
                 return Column(
-                  children: people
-                      .map((p) => ListTile(
-                            leading: CircleAvatar(
-                              child: Icon(p.isOwner ? Icons.account_balance_outlined : Icons.person_outline),
-                            ),
-                            title: Text(p.name, style: p.isOwner ? const TextStyle(fontWeight: FontWeight.bold) : null),
-                            subtitle: Text(p.mobile ?? (p.isOwner ? 'Owner' : 'Customer')),
-                            trailing: const Icon(Icons.chevron_right),
-                            onTap: () => Navigator.of(context).push(
-                              MaterialPageRoute(builder: (_) => PersonLedgerScreen(person: p)),
-                            ),
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (owners.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 16),
+                        child: Text('No owners yet.'),
+                      )
+                    else
+                      ...owners.map((p) => _PersonRow(
+                            person: p,
                             onLongPress: () => _handlePersonLongPress(context, ref, p),
-                          ))
-                      .toList(),
+                          )),
+                    const SizedBox(height: 24),
+                    Text('Other Customers', style: Theme.of(context).textTheme.titleMedium),
+                    const SizedBox(height: 8),
+                    if (others.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 8),
+                        child: Text('No other customers.'),
+                      )
+                    else
+                      ...others.map((p) => _PersonRow(
+                            person: p,
+                            onLongPress: () => _handlePersonLongPress(context, ref, p),
+                          )),
+                  ],
                 );
               },
               loading: () => const Center(child: CircularProgressIndicator()),
@@ -100,6 +115,29 @@ class DashboardScreen extends ConsumerWidget {
         await ref.read(peopleProvider.notifier).deletePerson(person.id);
       }
     }
+  }
+}
+
+class _PersonRow extends StatelessWidget {
+  const _PersonRow({required this.person, required this.onLongPress});
+
+  final Person person;
+  final VoidCallback onLongPress;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      leading: CircleAvatar(
+        child: Icon(person.isOwner ? Icons.account_balance_outlined : Icons.person_outline),
+      ),
+      title: Text(person.name, style: person.isOwner ? const TextStyle(fontWeight: FontWeight.bold) : null),
+      subtitle: Text(person.mobile ?? (person.isOwner ? 'Owner' : 'Customer')),
+      trailing: const Icon(Icons.chevron_right),
+      onTap: () => Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => PersonLedgerScreen(person: person)),
+      ),
+      onLongPress: onLongPress,
+    );
   }
 }
 

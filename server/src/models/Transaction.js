@@ -11,6 +11,7 @@ const transactionSchema = new mongoose.Schema(
     description: String,
     receiptImageUrl: String,
     date: { type: Date, required: true },
+    status: { type: String, enum: ['pending', 'confirmed'], default: 'confirmed' },
     isDeleted: { type: Boolean, default: false },
   },
   { timestamps: true }

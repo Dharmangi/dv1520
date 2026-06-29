@@ -24,7 +24,7 @@ function startOfMonth() {
 
 async function sumByType(matchExtra) {
   const result = await Transaction.aggregate([
-    { $match: { isDeleted: false, ...matchExtra } },
+    { $match: { isDeleted: false, status: { $ne: 'pending' }, ...matchExtra } },
     { $group: { _id: '$type', total: { $sum: '$amount' } } },
   ]);
   const totals = { received: 0, paid: 0 };
@@ -76,7 +76,7 @@ exports.rangeSummary = async (req, res) => {
 exports.byPerson = async (req, res) => {
   const { from, to } = req.query;
   const result = await Transaction.aggregate([
-    { $match: { isDeleted: false, ...dateRangeMatch(from, to) } },
+    { $match: { isDeleted: false, status: { $ne: 'pending' }, ...dateRangeMatch(from, to) } },
     {
       $group: {
         _id: '$personId',
@@ -111,7 +111,7 @@ exports.byPerson = async (req, res) => {
 exports.byCategory = async (req, res) => {
   const { from, to } = req.query;
   const result = await Transaction.aggregate([
-    { $match: { isDeleted: false, categoryId: { $ne: null }, ...dateRangeMatch(from, to) } },
+    { $match: { isDeleted: false, status: { $ne: 'pending' }, categoryId: { $ne: null }, ...dateRangeMatch(from, to) } },
     {
       $group: {
         _id: '$categoryId',
@@ -144,7 +144,7 @@ exports.byCategory = async (req, res) => {
 exports.timeSeries = async (req, res) => {
   const { from, to } = req.query;
   const result = await Transaction.aggregate([
-    { $match: { isDeleted: false, ...dateRangeMatch(from, to) } },
+    { $match: { isDeleted: false, status: { $ne: 'pending' }, ...dateRangeMatch(from, to) } },
     {
       $group: {
         _id: { date: { $dateToString: { format: '%Y-%m-%d', date: '$date' } }, type: '$type' },
