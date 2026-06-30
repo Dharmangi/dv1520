@@ -40,6 +40,9 @@ class HavalaListScreen extends ConsumerWidget {
                 ),
                 onLongPress: () => _handleLongPress(context, ref, havalas[index]),
                 onSettle: () => _showSettleSheet(context, ref, havalas[index]),
+                onEdit: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => AddHavalaScreen(editingHavala: havalas[index])),
+                ),
               ),
             );
           },
@@ -84,12 +87,14 @@ class _SettleHavalaSheet extends ConsumerStatefulWidget {
 class _SettleHavalaSheetState extends ConsumerState<_SettleHavalaSheet> {
   final _formKey = GlobalKey<FormState>();
   final _amountController = TextEditingController();
+  final _receivedViaController = TextEditingController();
   DateTime _date = DateTime.now();
   bool _saving = false;
 
   @override
   void dispose() {
     _amountController.dispose();
+    _receivedViaController.dispose();
     super.dispose();
   }
 
@@ -98,7 +103,12 @@ class _SettleHavalaSheetState extends ConsumerState<_SettleHavalaSheet> {
     setState(() => _saving = true);
     try {
       final amount = rupeesToPaise(double.parse(_amountController.text));
-      await ref.read(havalaListProvider.notifier).settleHavala(widget.havala.id, amount: amount, date: _date);
+      await ref.read(havalaListProvider.notifier).settleHavala(
+            widget.havala.id,
+            amount: amount,
+            date: _date,
+            receivedVia: _receivedViaController.text.trim().isEmpty ? null : _receivedViaController.text.trim(),
+          );
       if (mounted) Navigator.of(context).pop();
     } catch (e) {
       if (mounted) {
@@ -141,6 +151,14 @@ class _SettleHavalaSheetState extends ConsumerState<_SettleHavalaSheet> {
               },
             ),
             const SizedBox(height: 16),
+            TextFormField(
+              controller: _receivedViaController,
+              decoration: const InputDecoration(
+                labelText: 'Received Via (e.g. branch/location name)',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 16),
             ListTile(
               contentPadding: EdgeInsets.zero,
               title: Text('Date: ${_date.day}/${_date.month}/${_date.year}'),
@@ -170,12 +188,19 @@ class _SettleHavalaSheetState extends ConsumerState<_SettleHavalaSheet> {
 }
 
 class _HavalaCard extends StatelessWidget {
-  const _HavalaCard({required this.havala, required this.onTap, required this.onLongPress, required this.onSettle});
+  const _HavalaCard({
+    required this.havala,
+    required this.onTap,
+    required this.onLongPress,
+    required this.onSettle,
+    required this.onEdit,
+  });
 
   final Havala havala;
   final VoidCallback onTap;
   final VoidCallback onLongPress;
   final VoidCallback onSettle;
+  final VoidCallback onEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -199,6 +224,11 @@ class _HavalaCard extends StatelessWidget {
                     ),
                   ),
                   Text('${havala.date.day}/${havala.date.month}/${havala.date.year}'),
+                  IconButton(
+                    icon: const Icon(Icons.edit_outlined, size: 20),
+                    visualDensity: VisualDensity.compact,
+                    onPressed: onEdit,
+                  ),
                 ],
               ),
               const SizedBox(height: 8),

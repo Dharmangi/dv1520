@@ -49,7 +49,10 @@ class HavalaDetailScreen extends ConsumerWidget {
           ...current.splits.map((s) => Card(
                 child: ListTile(
                   title: Text(s.personName ?? 'Unknown'),
-                  subtitle: s.personPlace != null ? Text(s.personPlace!) : null,
+                  subtitle: Text([
+                    if (s.personPlace != null) s.personPlace!,
+                    '${s.date.day}/${s.date.month}/${s.date.year}',
+                  ].join(' • ')),
                   trailing: Text(formatRupees(s.amount), style: const TextStyle(fontWeight: FontWeight.bold)),
                 ),
               )),
@@ -112,7 +115,10 @@ class _EntryTile extends StatelessWidget {
           ),
         ),
         title: Text(txn.description ?? (txn.isPending ? 'Pending' : 'Settlement')),
-        subtitle: Text('${txn.date.day}/${txn.date.month}/${txn.date.year}'),
+        subtitle: Text([
+          '${txn.date.day}/${txn.date.month}/${txn.date.year}',
+          if (txn.receivedVia != null && txn.receivedVia!.isNotEmpty) 'via ${txn.receivedVia}',
+        ].join(' • ')),
         trailing: Text(
           formatRupees(txn.amount),
           style: TextStyle(

@@ -8,6 +8,7 @@ class Txn {
     required this.amount,
     this.paymentMode = 'cash',
     this.description,
+    this.receivedVia,
     required this.date,
     this.categoryId,
     this.categoryName,
@@ -22,6 +23,7 @@ class Txn {
   final int amount; // paise
   final String paymentMode;
   final String? description;
+  final String? receivedVia;
   final DateTime date;
   final String? categoryId;
   final String? categoryName;
@@ -41,6 +43,7 @@ class Txn {
       amount: json['amount'] as int,
       paymentMode: json['paymentMode'] as String? ?? 'cash',
       description: json['description'] as String?,
+      receivedVia: json['receivedVia'] as String?,
       date: DateTime.parse(json['date'] as String),
       categoryId: category is Map ? category['_id'] as String? : category as String?,
       categoryName: category is Map ? category['name'] as String? : null,

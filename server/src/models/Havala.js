@@ -4,6 +4,7 @@ const havalaSplitSchema = new mongoose.Schema(
   {
     personId: { type: mongoose.Schema.Types.ObjectId, ref: 'Person', required: true },
     amount: { type: Number, required: true },
+    date: { type: Date, required: true },
     transactionId: { type: mongoose.Schema.Types.ObjectId, ref: 'Transaction', required: true },
   },
   { _id: false }

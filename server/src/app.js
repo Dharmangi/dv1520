@@ -9,6 +9,8 @@ const dashboardRoutes = require('./routes/dashboard');
 const categoriesRoutes = require('./routes/categories');
 const capitalEntriesRoutes = require('./routes/capitalEntries');
 const havalaRoutes = require('./routes/havala');
+const dailySilakRoutes = require('./routes/dailySilak');
+const outstandingRoutes = require('./routes/outstanding');
 
 const app = express();
 
@@ -26,6 +28,8 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/categories', categoriesRoutes);
 app.use('/api/capital-entries', capitalEntriesRoutes);
 app.use('/api/havala', havalaRoutes);
+app.use('/api/daily-silak', dailySilakRoutes);
+app.use('/api/outstanding', outstandingRoutes);
 
 app.use((err, req, res, next) => {
   console.error(err);

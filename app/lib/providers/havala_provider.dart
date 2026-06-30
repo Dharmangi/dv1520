@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/network/api_client.dart';
 import '../models/havala.dart';
 import 'dashboard_provider.dart';
+import 'outstanding_provider.dart';
 import 'people_provider.dart';
 import 'transactions_provider.dart';
 
@@ -27,24 +28,50 @@ class HavalaListNotifier extends AsyncNotifier<List<Havala>> {
       'ownerId': ownerId,
       'totalAmount': totalAmount,
       'paidAmount': paidAmount,
-      'date': date.toIso8601String(),
+      'date': '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}',
       'splits': splits,
     });
     ref.invalidateSelf();
     ref.invalidate(dashboardProvider);
     ref.invalidate(transactionsProvider);
     ref.invalidate(peopleProvider);
+    ref.invalidate(outstandingProvider);
     await future;
   }
 
-  Future<void> settleHavala(String id, {required int amount, required DateTime date}) async {
-    await ApiClient.instance.dio.patch('/havala/$id/settle', data: {
-      'amount': amount,
-      'date': date.toIso8601String(),
+  Future<void> updateHavala({
+    required String id,
+    required String ownerId,
+    required int totalAmount,
+    required int paidAmount,
+    required DateTime date,
+    required List<Map<String, dynamic>> splits,
+  }) async {
+    await ApiClient.instance.dio.put('/havala/$id', data: {
+      'ownerId': ownerId,
+      'totalAmount': totalAmount,
+      'paidAmount': paidAmount,
+      'date': '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}',
+      'splits': splits,
     });
     ref.invalidateSelf();
     ref.invalidate(dashboardProvider);
     ref.invalidate(transactionsProvider);
+    ref.invalidate(peopleProvider);
+    ref.invalidate(outstandingProvider);
+    await future;
+  }
+
+  Future<void> settleHavala(String id, {required int amount, required DateTime date, String? receivedVia}) async {
+    await ApiClient.instance.dio.patch('/havala/$id/settle', data: {
+      'amount': amount,
+      'date': '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}',
+      if (receivedVia != null) 'receivedVia': receivedVia,
+    });
+    ref.invalidateSelf();
+    ref.invalidate(dashboardProvider);
+    ref.invalidate(transactionsProvider);
+    ref.invalidate(outstandingProvider);
     await future;
   }
 
@@ -53,6 +80,7 @@ class HavalaListNotifier extends AsyncNotifier<List<Havala>> {
     ref.invalidateSelf();
     ref.invalidate(dashboardProvider);
     ref.invalidate(transactionsProvider);
+    ref.invalidate(outstandingProvider);
     await future;
   }
 

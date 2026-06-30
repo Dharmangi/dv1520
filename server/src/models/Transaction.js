@@ -9,6 +9,7 @@ const transactionSchema = new mongoose.Schema(
     categoryId: { type: mongoose.Schema.Types.ObjectId, ref: 'Category' },
     paymentMode: { type: String, enum: ['cash', 'bank', 'upi', 'other'], default: 'cash' },
     description: String,
+    receivedVia: String,
     receiptImageUrl: String,
     date: { type: Date, required: true },
     status: { type: String, enum: ['pending', 'confirmed'], default: 'confirmed' },

@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/utils/currency.dart';
+import '../../models/havala.dart';
 import '../../models/person.dart';
 import '../../providers/havala_provider.dart';
 import '../../providers/people_provider.dart';
 
 class AddHavalaScreen extends ConsumerStatefulWidget {
-  const AddHavalaScreen({super.key});
+  const AddHavalaScreen({super.key, this.editingHavala});
+
+  final Havala? editingHavala;
 
   @override
   ConsumerState<AddHavalaScreen> createState() => _AddHavalaScreenState();
@@ -14,6 +17,7 @@ class AddHavalaScreen extends ConsumerStatefulWidget {
 
 class _CustomerSplit {
   Person? customer;
+  DateTime date = DateTime.now();
   final TextEditingController amountController = TextEditingController();
 
   void dispose() => amountController.dispose();
@@ -26,8 +30,30 @@ class _AddHavalaScreenState extends ConsumerState<AddHavalaScreen> {
   final _paidNowController = TextEditingController();
   Person? _selectedOwner;
   DateTime _date = DateTime.now();
-  final List<_CustomerSplit> _splits = [_CustomerSplit()];
+  List<_CustomerSplit> _splits = [_CustomerSplit()];
   bool _saving = false;
+  bool _initialized = false;
+
+  bool get _isEditing => widget.editingHavala != null;
+
+  void _prefillFromHavala(List<Person> people) {
+    if (_initialized) return;
+    final h = widget.editingHavala;
+    if (h == null) return;
+    _initialized = true;
+    _selectedOwner = people.where((p) => p.id == h.ownerId).firstOrNull;
+    _mobileController.text = _selectedOwner?.mobile ?? '';
+    _totalAmountController.text = (h.totalAmount / 100).toStringAsFixed(0);
+    _paidNowController.text = (h.paidAmount / 100).toStringAsFixed(0);
+    _date = h.date;
+    _splits = h.splits.map((s) {
+      final split = _CustomerSplit();
+      split.customer = people.where((p) => p.id == s.personId).firstOrNull;
+      split.amountController.text = (s.amount / 100).toStringAsFixed(0);
+      split.date = s.date;
+      return split;
+    }).toList();
+  }
 
   @override
   void dispose() {
@@ -40,7 +66,7 @@ class _AddHavalaScreenState extends ConsumerState<AddHavalaScreen> {
     super.dispose();
   }
 
-  void _addSplitRow() => setState(() => _splits.add(_CustomerSplit()));
+  void _addSplitRow() => setState(() => _splits.add(_CustomerSplit()..date = _date));
 
   void _removeSplitRow(int index) {
     setState(() {
@@ -100,18 +126,32 @@ class _AddHavalaScreenState extends ConsumerState<AddHavalaScreen> {
 
     setState(() => _saving = true);
     try {
-      await ref.read(havalaListProvider.notifier).createHavala(
-            ownerId: _selectedOwner!.id,
-            totalAmount: totalAmount,
-            paidAmount: paidNow,
-            date: _date,
-            splits: _splits
-                .map((s) => {
-                      'personId': s.customer!.id,
-                      'amount': rupeesToPaise(double.parse(s.amountController.text)),
-                    })
-                .toList(),
-          );
+      final splitsData = _splits
+          .map((s) => {
+                'personId': s.customer!.id,
+                'amount': rupeesToPaise(double.parse(s.amountController.text)),
+                'date': '${s.date.year}-${s.date.month.toString().padLeft(2, '0')}-${s.date.day.toString().padLeft(2, '0')}',
+              })
+          .toList();
+
+      if (_isEditing) {
+        await ref.read(havalaListProvider.notifier).updateHavala(
+              id: widget.editingHavala!.id,
+              ownerId: _selectedOwner!.id,
+              totalAmount: totalAmount,
+              paidAmount: paidNow,
+              date: _date,
+              splits: splitsData,
+            );
+      } else {
+        await ref.read(havalaListProvider.notifier).createHavala(
+              ownerId: _selectedOwner!.id,
+              totalAmount: totalAmount,
+              paidAmount: paidNow,
+              date: _date,
+              splits: splitsData,
+            );
+      }
 
       if (mounted) Navigator.of(context).pop();
     } catch (e) {
@@ -128,9 +168,10 @@ class _AddHavalaScreenState extends ConsumerState<AddHavalaScreen> {
     final peopleAsync = ref.watch(peopleProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('New Havala')),
+      appBar: AppBar(title: Text(_isEditing ? 'Edit Havala' : 'New Havala')),
       body: peopleAsync.when(
         data: (people) {
+          _prefillFromHavala(people);
           final owners = people.where((p) => p.isOwner).toList();
           final customers = people;
 
@@ -220,7 +261,9 @@ class _AddHavalaScreenState extends ConsumerState<AddHavalaScreen> {
                   onPressed: _saving ? null : _submit,
                   child: _saving
                       ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                      : Text(_pendingAmountPreview() > 0 ? 'Save Havala (Partial)' : 'Save Havala'),
+                      : Text(_isEditing
+                          ? 'Update Havala'
+                          : (_pendingAmountPreview() > 0 ? 'Save Havala (Partial)' : 'Save Havala')),
                 ),
               ],
             ),
@@ -236,38 +279,65 @@ class _AddHavalaScreenState extends ConsumerState<AddHavalaScreen> {
     final split = _splits[index];
     return Padding(
       padding: const EdgeInsets.only(top: 12),
-      child: Row(
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
-            flex: 3,
-            child: DropdownButtonFormField<Person>(
-              initialValue: split.customer,
-              decoration: const InputDecoration(labelText: 'Customer', border: OutlineInputBorder()),
-              items: customers
-                  .map((c) => DropdownMenuItem(
-                        value: c,
-                        child: Text(c.place != null ? '${c.name} (${c.place})' : c.name),
-                      ))
-                  .toList(),
-              onChanged: (c) => setState(() => split.customer = c),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                flex: 3,
+                child: DropdownButtonFormField<Person>(
+                  initialValue: split.customer,
+                  decoration: const InputDecoration(labelText: 'Customer', border: OutlineInputBorder()),
+                  items: customers
+                      .map((c) => DropdownMenuItem(
+                            value: c,
+                            child: Text(c.place != null ? '${c.name} (${c.place})' : c.name),
+                          ))
+                      .toList(),
+                  onChanged: (c) => setState(() => split.customer = c),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                flex: 2,
+                child: TextFormField(
+                  controller: split.amountController,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: const InputDecoration(labelText: 'Amount (₹)', border: OutlineInputBorder()),
+                  onChanged: (_) => setState(() {}),
+                ),
+              ),
+              if (_splits.length > 1)
+                IconButton(
+                  icon: const Icon(Icons.remove_circle_outline),
+                  onPressed: () => _removeSplitRow(index),
+                ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          InkWell(
+            onTap: () async {
+              final picked = await showDatePicker(
+                context: context,
+                initialDate: split.date,
+                firstDate: DateTime(2020),
+                lastDate: DateTime(2100),
+              );
+              if (picked != null) setState(() => split.date = picked);
+            },
+            child: Row(
+              children: [
+                Icon(Icons.calendar_today, size: 14, color: Theme.of(context).colorScheme.outline),
+                const SizedBox(width: 6),
+                Text(
+                  'Payout date: ${split.date.day}/${split.date.month}/${split.date.year}',
+                  style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.outline),
+                ),
+              ],
             ),
           ),
-          const SizedBox(width: 8),
-          Expanded(
-            flex: 2,
-            child: TextFormField(
-              controller: split.amountController,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: const InputDecoration(labelText: 'Amount (₹)', border: OutlineInputBorder()),
-              onChanged: (_) => setState(() {}),
-            ),
-          ),
-          if (_splits.length > 1)
-            IconButton(
-              icon: const Icon(Icons.remove_circle_outline),
-              onPressed: () => _removeSplitRow(index),
-            ),
         ],
       ),
     );

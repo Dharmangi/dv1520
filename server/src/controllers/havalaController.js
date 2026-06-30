@@ -10,15 +10,16 @@ exports.list = async (req, res) => {
   res.json(havalas);
 };
 
-exports.create = async (req, res) => {
-  const { ownerId, totalAmount, paidAmount, date, splits } = req.body;
+async function buildHavalaRecords({ ownerId, totalAmount, paidAmount, splits, dateInput }) {
+  const datePart = String(dateInput).slice(0, 10);
+  const date = new Date(`${datePart}T00:00:00.000Z`);
 
   const splitsTotal = splits.reduce((sum, s) => sum + s.amount, 0);
   if (splitsTotal !== totalAmount) {
-    return res.status(400).json({ error: 'Split amounts must add up to the total amount' });
+    throw new Error('Split amounts must add up to the total amount');
   }
   if (paidAmount > totalAmount) {
-    return res.status(400).json({ error: 'Paid amount cannot exceed total amount' });
+    throw new Error('Paid amount cannot exceed total amount');
   }
 
   const ownerTransactionIds = [];
@@ -53,6 +54,8 @@ exports.create = async (req, res) => {
 
   const splitRecords = [];
   for (const split of splits) {
+    const splitDatePart = split.date ? String(split.date).slice(0, 10) : datePart;
+    const splitDate = new Date(`${splitDatePart}T00:00:00.000Z`);
     const txn = await Transaction.create({
       clientUuid: randomUUID(),
       personId: split.personId,
@@ -60,20 +63,25 @@ exports.create = async (req, res) => {
       amount: split.amount,
       paymentMode: 'cash',
       description: 'Havala payout',
-      date,
+      date: splitDate,
     });
-    splitRecords.push({ personId: split.personId, amount: split.amount, transactionId: txn._id });
+    splitRecords.push({ personId: split.personId, amount: split.amount, date: splitDate, transactionId: txn._id });
   }
 
-  const havala = await Havala.create({
-    ownerId,
-    totalAmount,
-    paidAmount,
-    ownerTransactionIds,
-    pendingTransactionId,
-    date,
-    splits: splitRecords,
-  });
+  return { ownerId, totalAmount, paidAmount, ownerTransactionIds, pendingTransactionId, date, splits: splitRecords };
+}
+
+exports.create = async (req, res) => {
+  const { ownerId, totalAmount, paidAmount, splits } = req.body;
+
+  let records;
+  try {
+    records = await buildHavalaRecords({ ownerId, totalAmount, paidAmount, splits, dateInput: req.body.date });
+  } catch (err) {
+    return res.status(400).json({ error: err.message });
+  }
+
+  const havala = await Havala.create(records);
 
   const populated = await Havala.findById(havala._id)
     .populate('ownerId', 'name mobile')
@@ -82,8 +90,42 @@ exports.create = async (req, res) => {
   res.status(201).json(populated);
 };
 
+exports.update = async (req, res) => {
+  const existing = await Havala.findOne({ _id: req.params.id, isDeleted: false });
+  if (!existing) return res.status(404).json({ error: 'Not found' });
+
+  const { ownerId, totalAmount, paidAmount, splits } = req.body;
+
+  let records;
+  try {
+    records = await buildHavalaRecords({ ownerId, totalAmount, paidAmount, splits, dateInput: req.body.date });
+  } catch (err) {
+    return res.status(400).json({ error: err.message });
+  }
+
+  // Soft-delete old transactions tied to this havala
+  const oldTransactionIds = [...existing.splits.map((s) => s.transactionId), ...existing.ownerTransactionIds];
+  if (existing.pendingTransactionId) oldTransactionIds.push(existing.pendingTransactionId);
+  await Transaction.updateMany({ _id: { $in: oldTransactionIds } }, { isDeleted: true });
+
+  existing.ownerId = records.ownerId;
+  existing.totalAmount = records.totalAmount;
+  existing.paidAmount = records.paidAmount;
+  existing.ownerTransactionIds = records.ownerTransactionIds;
+  existing.pendingTransactionId = records.pendingTransactionId;
+  existing.date = records.date;
+  existing.splits = records.splits;
+  await existing.save();
+
+  const populated = await Havala.findById(existing._id)
+    .populate('ownerId', 'name mobile')
+    .populate('splits.personId', 'name place');
+
+  res.json(populated);
+};
+
 exports.settle = async (req, res) => {
-  const { amount, date } = req.body;
+  const { amount, date, receivedVia } = req.body;
   const havala = await Havala.findOne({ _id: req.params.id, isDeleted: false });
   if (!havala) return res.status(404).json({ error: 'Not found' });
 
@@ -92,6 +134,10 @@ exports.settle = async (req, res) => {
     return res.status(400).json({ error: `Settlement amount must be between 1 and ${pending}` });
   }
 
+  // Normalise to UTC midnight to avoid IST timezone shift
+  const datePart = String(date).slice(0, 10);
+  const normalisedDate = new Date(`${datePart}T00:00:00.000Z`);
+
   const settleTxn = await Transaction.create({
     clientUuid: randomUUID(),
     personId: havala.ownerId,
@@ -99,7 +145,8 @@ exports.settle = async (req, res) => {
     amount,
     paymentMode: 'cash',
     description: amount < pending ? 'Havala settlement (partial)' : 'Havala settlement',
-    date,
+    receivedVia: receivedVia || undefined,
+    date: normalisedDate,
   });
 
   havala.paidAmount += amount;
