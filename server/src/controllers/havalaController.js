@@ -126,7 +126,7 @@ exports.update = async (req, res) => {
 
 exports.settle = async (req, res) => {
   const { amount, date, receivedVia } = req.body;
-  const havala = await Havala.findOne({ _id: req.params.id, isDeleted: false });
+  const havala = await Havala.findOne({ _id: req.params.id, isDeleted: false }).populate('ownerId', 'name');
   if (!havala) return res.status(404).json({ error: 'Not found' });
 
   const pending = havala.totalAmount - havala.paidAmount;
@@ -140,7 +140,7 @@ exports.settle = async (req, res) => {
 
   const settleTxn = await Transaction.create({
     clientUuid: randomUUID(),
-    personId: havala.ownerId,
+    personId: havala.ownerId._id,
     type: 'received',
     amount,
     paymentMode: 'cash',

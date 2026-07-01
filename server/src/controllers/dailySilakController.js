@@ -1,5 +1,4 @@
 const DailySilak = require('../models/DailySilak');
-const Havala = require('../models/Havala');
 const Person = require('../models/Person');
 
 function calcTotals(entries) {
@@ -39,35 +38,7 @@ exports.getByDate = async (req, res) => {
   }
 
   if (!silak) {
-    // Auto-build from havalas on this date
-    const havalas = await Havala.find({ date: { $gte: start, $lte: end }, isDeleted: false })
-      .populate('ownerId', 'name')
-      .populate('splits.personId', 'name place');
-
-    const entries = [];
-    for (const h of havalas) {
-      entries.push({
-        personId: h.ownerId?._id || null,
-        personName: h.ownerId?.name || 'Unknown',
-        amount: h.totalAmount,
-        type: 'received',
-        note: 'Havala received',
-        havalaId: h._id,
-      });
-      for (const split of h.splits) {
-        entries.push({
-          personId: split.personId?._id || null,
-          personName: split.personId?.name || 'Unknown',
-          amount: split.amount,
-          type: 'paid',
-          note: split.personId?.place ? `To ${split.personId.place}` : 'Havala payout',
-          havalaId: h._id,
-        });
-      }
-    }
-
-    const totals = calcTotals(entries);
-    silak = await DailySilak.create({ date: start, entries, ...totals });
+    silak = await DailySilak.create({ date: start, entries: [], totalReceived: 0, totalPaid: 0, netBalance: 0 });
   }
 
   res.json(silak);
@@ -170,43 +141,16 @@ exports.removeEntry = async (req, res) => {
   res.json(silak);
 };
 
-// POST /daily-silak/:date/sync — re-sync from havalas
+// POST /daily-silak/:date/sync — strip stale Havala-derived entries, keep manual ones
 exports.sync = async (req, res) => {
   const { date } = req.params;
   const { start, end } = dayRange(date);
 
-  const havalas = await Havala.find({ date: { $gte: start, $lte: end }, isDeleted: false })
-    .populate('ownerId', 'name')
-    .populate('splits.personId', 'name place');
-
-  const havalaEntries = [];
-  for (const h of havalas) {
-    havalaEntries.push({
-      personId: h.ownerId?._id || null,
-      personName: h.ownerId?.name || 'Unknown',
-      amount: h.totalAmount,
-      type: 'received',
-      note: 'Havala received',
-      havalaId: h._id,
-    });
-    for (const split of h.splits) {
-      havalaEntries.push({
-        personId: split.personId?._id || null,
-        personName: split.personId?.name || 'Unknown',
-        amount: split.amount,
-        type: 'paid',
-        note: split.personId?.place ? `To ${split.personId.place}` : 'Havala payout',
-        havalaId: h._id,
-      });
-    }
-  }
-
   let silak = await DailySilak.findOne({ date: { $gte: start, $lte: end }, isDeleted: false });
   if (!silak) {
-    silak = await DailySilak.create({ date: start, entries: havalaEntries, ...calcTotals(havalaEntries) });
+    silak = await DailySilak.create({ date: start, entries: [], totalReceived: 0, totalPaid: 0, netBalance: 0 });
   } else {
-    const manualEntries = silak.entries.filter((e) => !e.havalaId);
-    silak.entries = [...havalaEntries, ...manualEntries];
+    silak.entries = silak.entries.filter((e) => !e.havalaId);
     const totals = calcTotals(silak.entries);
     silak.totalReceived = totals.totalReceived;
     silak.totalPaid = totals.totalPaid;
