@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
+import '../../core/utils/amount_input_formatter.dart';
 import '../../models/daily_silak.dart';
 import '../../providers/daily_silak_provider.dart';
 import '../../providers/outstanding_provider.dart';
 
 class AddOutstandingSheet extends ConsumerStatefulWidget {
-  const AddOutstandingSheet({super.key, required this.date});
+  const AddOutstandingSheet({super.key, required this.date, this.allowDateChange = false});
   final String date;
+  final bool allowDateChange;
 
   @override
   ConsumerState<AddOutstandingSheet> createState() => _State();
@@ -22,12 +25,14 @@ class _State extends ConsumerState<AddOutstandingSheet> {
   String? _customName;
   String _searchQuery = '';
   bool _saving = false;
+  late DateTime _selectedDate;
 
   bool get hasPersonSelected => _selectedPerson != null || (_customName != null && _customName!.isNotEmpty);
 
   @override
   void initState() {
     super.initState();
+    _selectedDate = DateTime.parse(widget.date);
     _searchCtrl.addListener(() => setState(() => _searchQuery = _searchCtrl.text));
   }
 
@@ -47,13 +52,14 @@ class _State extends ConsumerState<AddOutstandingSheet> {
     }
     setState(() => _saving = true);
     try {
-      final amount = (double.parse(_amountCtrl.text) * 100).round();
-      await ref.read(outstandingProvider(widget.date).notifier).createEntry(
+      final amount = (parseAmountInput(_amountCtrl.text) * 100).round();
+      final targetDate = DateFormat('yyyy-MM-dd').format(_selectedDate);
+      await ref.read(outstandingProvider(targetDate).notifier).createEntry(
             personId: _selectedPerson?.id,
             personName: _selectedPerson?.name ?? _customName!,
             totalAmount: amount,
             note: _noteCtrl.text.trim(),
-            createdDate: DateTime.parse(widget.date),
+            createdDate: _selectedDate,
           );
       if (mounted) Navigator.pop(context);
     } catch (e) {
@@ -89,7 +95,43 @@ class _State extends ConsumerState<AddOutstandingSheet> {
                 IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
               ],
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 8),
+
+            if (widget.allowDateChange) ...[
+              InkWell(
+                borderRadius: BorderRadius.circular(14),
+                onTap: () async {
+                  final picked = await showDatePicker(
+                    context: context,
+                    initialDate: _selectedDate,
+                    firstDate: DateTime(2020),
+                    lastDate: DateTime.now(),
+                  );
+                  if (picked != null) setState(() => _selectedDate = picked);
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEFF6F9),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.calendar_month, size: 18, color: Color(0xFF5C7480)),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          DateFormat('dd MMM yyyy, EEEE').format(_selectedDate),
+                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                        ),
+                      ),
+                      const Icon(Icons.keyboard_arrow_down, size: 18, color: Color(0xFF5C7480)),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
 
             // Person selection
             if (hasPersonSelected)
@@ -155,9 +197,10 @@ class _State extends ConsumerState<AddOutstandingSheet> {
               controller: _amountCtrl,
               decoration: const InputDecoration(labelText: 'Amount (₹)', border: OutlineInputBorder(), prefixText: '₹ '),
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              inputFormatters: [AmountInputFormatter()],
               validator: (v) {
                 if (v == null || v.trim().isEmpty) return 'Required';
-                final n = double.tryParse(v);
+                final n = double.tryParse(v.replaceAll(',', ''));
                 if (n == null || n <= 0) return 'Enter valid amount';
                 return null;
               },

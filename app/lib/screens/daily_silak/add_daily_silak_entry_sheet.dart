@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
+import '../../core/utils/amount_input_formatter.dart';
 import '../../models/daily_silak.dart';
 import '../../providers/daily_silak_provider.dart';
 
@@ -10,12 +12,14 @@ class AddDailySilakEntrySheet extends ConsumerStatefulWidget {
     required this.initialType,
     this.editEntry,
     this.silakId,
+    this.allowDateChange = false,
   });
 
   final String date;
   final String initialType;
   final DailySilakEntry? editEntry;
   final String? silakId;
+  final bool allowDateChange;
 
   @override
   ConsumerState<AddDailySilakEntrySheet> createState() => _State();
@@ -28,6 +32,7 @@ class _State extends ConsumerState<AddDailySilakEntrySheet> {
   final _searchCtrl = TextEditingController();
 
   late String _type;
+  late DateTime _selectedDate;
   SilakPerson? _selectedPerson;  // existing person from DB
   String? _customName;           // manually typed new name
   bool _saving = false;
@@ -41,9 +46,10 @@ class _State extends ConsumerState<AddDailySilakEntrySheet> {
   void initState() {
     super.initState();
     _type = widget.initialType;
+    _selectedDate = DateTime.parse(widget.date);
     if (isEdit) {
       final e = widget.editEntry!;
-      _amountCtrl.text = (e.amount / 100).toStringAsFixed(0);
+      _amountCtrl.text = NumberFormat.decimalPattern('en_IN').format(e.amount / 100);
       _noteCtrl.text = e.note;
       // Pre-fill name for edit
       _customName = e.personName;
@@ -95,29 +101,43 @@ class _State extends ConsumerState<AddDailySilakEntrySheet> {
 
     setState(() => _saving = true);
     try {
-      final amount = (double.parse(_amountCtrl.text) * 100).round();
-      final notifier = ref.read(dailySilakByDateProvider(widget.date).notifier);
+      final amount = (parseAmountInput(_amountCtrl.text) * 100).round();
+      final targetDate = DateFormat('yyyy-MM-dd').format(_selectedDate);
       final personName = _selectedPerson?.name ?? _customName ?? widget.editEntry!.personName;
       final personId = _selectedPerson?.id;
 
       if (isEdit) {
-        await notifier.editEntry(
-          silakId: widget.silakId!,
-          entryId: widget.editEntry!.id,
-          personId: personId,
-          personName: personName,
-          amount: amount,
-          type: _type,
-          note: _noteCtrl.text.trim(),
-        );
+        final dateChanged = targetDate != widget.date;
+        if (dateChanged) {
+          // Entry lives inside its day's document — moving days means
+          // removing it from the old day and re-adding it under the new one.
+          await ref.read(dailySilakByDateProvider(widget.date).notifier).removeEntry(widget.silakId!, widget.editEntry!.id);
+          await ref.read(dailySilakByDateProvider(targetDate).notifier).addEntry(
+                personId: personId,
+                personName: personName,
+                amount: amount,
+                type: _type,
+                note: _noteCtrl.text.trim(),
+              );
+        } else {
+          await ref.read(dailySilakByDateProvider(targetDate).notifier).editEntry(
+                silakId: widget.silakId!,
+                entryId: widget.editEntry!.id,
+                personId: personId,
+                personName: personName,
+                amount: amount,
+                type: _type,
+                note: _noteCtrl.text.trim(),
+              );
+        }
       } else {
-        await notifier.addEntry(
-          personId: personId,
-          personName: personName,
-          amount: amount,
-          type: _type,
-          note: _noteCtrl.text.trim(),
-        );
+        await ref.read(dailySilakByDateProvider(targetDate).notifier).addEntry(
+              personId: personId,
+              personName: personName,
+              amount: amount,
+              type: _type,
+              note: _noteCtrl.text.trim(),
+            );
       }
       if (mounted) Navigator.pop(context);
     } catch (e) {
@@ -155,7 +175,44 @@ class _State extends ConsumerState<AddDailySilakEntrySheet> {
                 IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
               ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
+
+            // Date picker (shown when the caller allows changing the date)
+            if (widget.allowDateChange) ...[
+              InkWell(
+                borderRadius: BorderRadius.circular(14),
+                onTap: () async {
+                  final picked = await showDatePicker(
+                    context: context,
+                    initialDate: _selectedDate,
+                    firstDate: DateTime(2020),
+                    lastDate: DateTime.now(),
+                  );
+                  if (picked != null) setState(() => _selectedDate = picked);
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEFF6F9),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.calendar_month, size: 18, color: Color(0xFF5C7480)),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          DateFormat('dd MMM yyyy, EEEE').format(_selectedDate),
+                          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+                        ),
+                      ),
+                      const Icon(Icons.keyboard_arrow_down, size: 18, color: Color(0xFF5C7480)),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
 
             // Received / Paid toggle
             Row(
@@ -353,9 +410,10 @@ class _State extends ConsumerState<AddDailySilakEntrySheet> {
                 prefixText: '₹ ',
               ),
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              inputFormatters: [AmountInputFormatter()],
               validator: (v) {
                 if (v == null || v.trim().isEmpty) return 'Required';
-                final n = double.tryParse(v);
+                final n = double.tryParse(v.replaceAll(',', ''));
                 if (n == null || n <= 0) return 'Enter valid amount';
                 return null;
               },

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/utils/amount_input_formatter.dart';
 import '../../core/utils/currency.dart';
 import '../../core/widgets/confirm_delete_dialog.dart';
 import '../../models/havala.dart';
@@ -102,7 +103,7 @@ class _SettleHavalaSheetState extends ConsumerState<_SettleHavalaSheet> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
     try {
-      final amount = rupeesToPaise(double.parse(_amountController.text));
+      final amount = rupeesToPaise(parseAmountInput(_amountController.text));
       await ref.read(havalaListProvider.notifier).settleHavala(
             widget.havala.id,
             amount: amount,
@@ -141,10 +142,11 @@ class _SettleHavalaSheetState extends ConsumerState<_SettleHavalaSheet> {
             TextFormField(
               controller: _amountController,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              inputFormatters: [AmountInputFormatter()],
               decoration: const InputDecoration(labelText: 'Amount Paid Now (₹)', border: OutlineInputBorder()),
               validator: (v) {
                 if (v == null || v.isEmpty) return 'Enter an amount';
-                final value = double.tryParse(v);
+                final value = double.tryParse(v.replaceAll(',', ''));
                 if (value == null || value <= 0) return 'Enter a valid amount';
                 if (rupeesToPaise(value) > widget.havala.pendingAmount) return 'Cannot exceed pending amount';
                 return null;

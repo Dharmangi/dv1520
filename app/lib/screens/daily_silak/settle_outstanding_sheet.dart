@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
+import '../../core/utils/amount_input_formatter.dart';
 import '../../core/utils/currency.dart';
 import '../../models/outstanding_entry.dart';
 import '../../providers/outstanding_provider.dart';
@@ -24,7 +26,7 @@ class _State extends ConsumerState<SettleOutstandingSheet> {
   void initState() {
     super.initState();
     // Default to full pending amount
-    _amountCtrl.text = (widget.entry.pendingAmount / 100).toStringAsFixed(0);
+    _amountCtrl.text = NumberFormat.decimalPattern('en_IN').format(widget.entry.pendingAmount / 100);
   }
 
   @override
@@ -38,7 +40,7 @@ class _State extends ConsumerState<SettleOutstandingSheet> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
     try {
-      final amount = (double.parse(_amountCtrl.text) * 100).round();
+      final amount = (parseAmountInput(_amountCtrl.text) * 100).round();
 
       // 1. Settle the outstanding entry
       await ref.read(outstandingProvider(widget.date).notifier).settleEntry(
@@ -122,9 +124,10 @@ class _State extends ConsumerState<SettleOutstandingSheet> {
               controller: _amountCtrl,
               decoration: const InputDecoration(labelText: 'Settlement Amount (₹)', border: OutlineInputBorder(), prefixText: '₹ '),
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              inputFormatters: [AmountInputFormatter()],
               validator: (v) {
                 if (v == null || v.trim().isEmpty) return 'Required';
-                final n = double.tryParse(v);
+                final n = double.tryParse(v.replaceAll(',', ''));
                 if (n == null || n <= 0) return 'Enter valid amount';
                 final paise = (n * 100).round();
                 if (paise > entry.pendingAmount) return 'Cannot exceed pending ${formatRupees(entry.pendingAmount)}';

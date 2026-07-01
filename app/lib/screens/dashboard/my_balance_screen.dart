@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
+import '../../core/utils/amount_input_formatter.dart';
 import '../../core/utils/currency.dart';
 import '../../core/widgets/confirm_delete_dialog.dart';
 import '../../models/capital_entry.dart';
@@ -127,7 +129,7 @@ class _AddCapitalEntrySheetState extends ConsumerState<_AddCapitalEntrySheet> {
     _sign = (existing != null && existing.amount < 0) ? 'subtract' : 'add';
     _date = existing?.date ?? DateTime.now();
     _amountController = TextEditingController(
-      text: existing != null ? (existing.amount.abs() / 100).toStringAsFixed(2) : '',
+      text: existing != null ? NumberFormat.decimalPattern('en_IN').format(existing.amount.abs() / 100) : '',
     );
     _noteController = TextEditingController(text: existing?.note ?? '');
   }
@@ -143,7 +145,7 @@ class _AddCapitalEntrySheetState extends ConsumerState<_AddCapitalEntrySheet> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
     try {
-      var amount = rupeesToPaise(double.parse(_amountController.text));
+      var amount = rupeesToPaise(parseAmountInput(_amountController.text));
       if (_sign == 'subtract') amount = -amount;
       final note = _noteController.text.trim().isEmpty ? null : _noteController.text.trim();
       if (widget.existing != null) {
@@ -195,10 +197,12 @@ class _AddCapitalEntrySheetState extends ConsumerState<_AddCapitalEntrySheet> {
             TextFormField(
               controller: _amountController,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              inputFormatters: [AmountInputFormatter()],
               decoration: const InputDecoration(labelText: 'Amount (₹)', border: OutlineInputBorder()),
               validator: (v) {
                 if (v == null || v.isEmpty) return 'Enter an amount';
-                if (double.tryParse(v) == null || double.parse(v) <= 0) return 'Enter a valid amount';
+                final n = double.tryParse(v.replaceAll(',', ''));
+                if (n == null || n <= 0) return 'Enter a valid amount';
                 return null;
               },
             ),

@@ -14,7 +14,7 @@ class DV1520App extends StatelessWidget {
     return MaterialApp(
       title: 'DV1520',
       theme: AppTheme.light,
-      darkTheme: AppTheme.dark,
+      themeMode: ThemeMode.light,
       home: const RootShell(),
     );
   }

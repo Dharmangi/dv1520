@@ -6,7 +6,6 @@ import '../../models/person.dart';
 import '../../models/transaction.dart';
 import '../../providers/people_provider.dart';
 import '../../providers/transactions_provider.dart';
-import '../transactions/add_transaction_sheet.dart';
 
 int _balanceOf(List<Txn> txns) => txns
     .where((t) => !t.isPending)
@@ -27,11 +26,6 @@ class PersonLedgerScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(title: Text(person.name)),
-      floatingActionButton: FloatingActionButton(
-        heroTag: 'ledger_fab',
-        onPressed: () => showAddTransactionSheet(context, initialPerson: person),
-        child: const Icon(Icons.add),
-      ),
       body: txnsAsync.when(
         data: (txns) {
           final balance = _balanceOf(txns);
@@ -47,7 +41,7 @@ class PersonLedgerScreen extends ConsumerWidget {
               else
                 ...txns.map((t) => _TransactionTile(
                       txn: t,
-                      onLongPress: () => _handleTransactionLongPress(context, ref, person, t),
+                      onLongPress: () => _handleTransactionLongPress(context, ref, t),
                     )),
             ],
           );
@@ -59,16 +53,10 @@ class PersonLedgerScreen extends ConsumerWidget {
   }
 }
 
-Future<void> _handleTransactionLongPress(BuildContext context, WidgetRef ref, Person person, Txn txn) async {
-  final choice = await showEditDeleteMenu(context);
-  if (choice == 'edit') {
-    if (context.mounted) showAddTransactionSheet(context, initialPerson: person, existing: txn);
-  } else if (choice == 'delete') {
-    if (!context.mounted) return;
-    final confirmed = await confirmDelete(context, message: 'Delete this transaction?');
-    if (confirmed) {
-      await ref.read(transactionsProvider.notifier).deleteTransaction(txn);
-    }
+Future<void> _handleTransactionLongPress(BuildContext context, WidgetRef ref, Txn txn) async {
+  final confirmed = await confirmDelete(context, message: 'Delete this transaction?');
+  if (confirmed) {
+    await ref.read(transactionsProvider.notifier).deleteTransaction(txn);
   }
 }
 
@@ -83,11 +71,6 @@ class _OwnerLedgerView extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(title: Text(owner.name)),
-      floatingActionButton: FloatingActionButton(
-        heroTag: 'ledger_fab',
-        onPressed: () => showAddTransactionSheet(context, initialPerson: owner),
-        child: const Icon(Icons.add),
-      ),
       body: ledgerAsync.when(
         data: (ledger) {
           final ownTxns = ledger.transactions.where((t) => t.personId == owner.id).toList();
@@ -108,12 +91,7 @@ class _OwnerLedgerView extends ConsumerWidget {
                 ...ledger.transactions.map((t) => _TransactionTile(
                       txn: t,
                       showPersonName: true,
-                      onLongPress: () => _handleTransactionLongPress(
-                        context,
-                        ref,
-                        t.personId == owner.id ? owner : ledger.customers.firstWhere((c) => c.id == t.personId),
-                        t,
-                      ),
+                      onLongPress: () => _handleTransactionLongPress(context, ref, t),
                     )),
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 24, 16, 16),

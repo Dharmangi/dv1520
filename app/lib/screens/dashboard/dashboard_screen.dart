@@ -7,7 +7,6 @@ import '../../providers/dashboard_provider.dart';
 import '../../providers/people_provider.dart';
 import '../people/add_person_sheet.dart';
 import '../people/person_ledger_screen.dart';
-import '../transactions/add_transaction_sheet.dart';
 import 'my_balance_screen.dart';
 
 class DashboardScreen extends ConsumerWidget {
@@ -20,11 +19,6 @@ class DashboardScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(title: const Text('DV1520')),
-      floatingActionButton: FloatingActionButton(
-        heroTag: 'dashboard_fab',
-        onPressed: () => showAddTransactionSheet(context),
-        child: const Icon(Icons.add),
-      ),
       body: RefreshIndicator(
         onRefresh: () async {
           ref.invalidate(dashboardProvider);

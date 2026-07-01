@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import '../../core/theme/app_theme.dart';
 import '../../core/utils/currency.dart';
 import '../../models/daily_silak.dart';
 import '../../models/outstanding_entry.dart';
 import '../../providers/daily_silak_provider.dart';
 import '../../providers/outstanding_provider.dart';
 import 'add_daily_silak_entry_sheet.dart';
-import 'add_outstanding_sheet.dart';
 import 'settle_outstanding_sheet.dart';
 
 class DailySilakDetailScreen extends ConsumerWidget {
@@ -68,9 +68,9 @@ class DailySilakDetailScreen extends ConsumerWidget {
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   child: Row(
                     children: [
-                      Expanded(child: _ColHeader(label: 'CREDIT / RECEIVED', color: Colors.green.shade700, icon: Icons.arrow_downward)),
+                      Expanded(child: _ColHeader(label: 'CREDIT', icon: Icons.arrow_downward, color: Colors.green.shade700)),
                       const SizedBox(width: 8),
-                      Expanded(child: _ColHeader(label: 'DEBIT / PAID', color: Colors.red.shade700, icon: Icons.arrow_upward)),
+                      Expanded(child: _ColHeader(label: 'DEBIT', icon: Icons.arrow_upward, color: Colors.red.shade700)),
                     ],
                   ),
                 ),
@@ -110,36 +110,6 @@ class DailySilakDetailScreen extends ConsumerWidget {
           },
         ),
       ),
-      floatingActionButton: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Add debit (outstanding)
-          FloatingActionButton.small(
-            heroTag: 'debit',
-            backgroundColor: Colors.red.shade700,
-            tooltip: 'Add Debit / Outstanding',
-            onPressed: () => showModalBottomSheet(
-              context: context,
-              isScrollControlled: true,
-              builder: (_) => AddOutstandingSheet(date: date),
-            ),
-            child: const Icon(Icons.arrow_upward, color: Colors.white),
-          ),
-          const SizedBox(height: 8),
-          // Add credit (received)
-          FloatingActionButton.extended(
-            heroTag: 'credit',
-            backgroundColor: Colors.green.shade700,
-            onPressed: () => showModalBottomSheet(
-              context: context,
-              isScrollControlled: true,
-              builder: (_) => AddDailySilakEntrySheet(date: date, initialType: 'received'),
-            ),
-            icon: const Icon(Icons.arrow_downward, color: Colors.white),
-            label: const Text('Add Credit', style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
     );
   }
 }
@@ -158,7 +128,7 @@ class _CreditColumn extends StatelessWidget {
     final hasAnything = entries.isNotEmpty || havalaCredits.isNotEmpty;
 
     if (!hasAnything) {
-      return const Center(child: Padding(padding: EdgeInsets.all(16), child: Text('No credit\nentries today', textAlign: TextAlign.center, style: TextStyle(fontSize: 12))));
+      return const _EmptyState(text: 'No credit\nentries today');
     }
 
     return ListView(
@@ -172,7 +142,7 @@ class _CreditColumn extends StatelessWidget {
                 amount: h.totalAmount,
                 note: 'Havala payment received',
                 color: Colors.green.shade800,
-                canDelete: false,
+                canEdit: false,
               )),
         ],
         // Manual received entries
@@ -183,7 +153,18 @@ class _CreditColumn extends StatelessWidget {
                 amount: entry.amount,
                 note: entry.note,
                 color: Colors.green.shade700,
-                canDelete: !entry.isFromHavala,
+                canEdit: !entry.isFromHavala,
+                onEdit: () => showModalBottomSheet(
+                  context: context,
+                  isScrollControlled: true,
+                  builder: (_) => AddDailySilakEntrySheet(
+                    date: date,
+                    initialType: 'received',
+                    editEntry: entry,
+                    silakId: silak.id,
+                    allowDateChange: true,
+                  ),
+                ),
                 onDelete: () async {
                   final confirmed = await _confirmDialog(context, entry.personName);
                   if (confirmed == true) {
@@ -213,7 +194,7 @@ class _DebitColumn extends StatelessWidget {
 
     final hasAnything = todayPaid.isNotEmpty || outstandingEntries.isNotEmpty || havalaPending.isNotEmpty;
     if (!hasAnything) {
-      return const Center(child: Padding(padding: EdgeInsets.all(16), child: Text('No debit\nentries', textAlign: TextAlign.center, style: TextStyle(fontSize: 12))));
+      return const _EmptyState(text: 'No debit\nentries');
     }
 
     return ListView(
@@ -233,7 +214,7 @@ class _DebitColumn extends StatelessWidget {
                 amount: h.totalPending,
                 note: '${h.havalaCount} havala(s) pending',
                 color: Colors.orange.shade700,
-                canDelete: false,
+                canEdit: false,
               )),
         ],
 
@@ -245,7 +226,18 @@ class _DebitColumn extends StatelessWidget {
                 amount: entry.amount,
                 note: entry.note,
                 color: Colors.red.shade700,
-                canDelete: !entry.isFromHavala,
+                canEdit: !entry.isFromHavala,
+                onEdit: () => showModalBottomSheet(
+                  context: context,
+                  isScrollControlled: true,
+                  builder: (_) => AddDailySilakEntrySheet(
+                    date: date,
+                    initialType: 'paid',
+                    editEntry: entry,
+                    silakId: silak.id,
+                    allowDateChange: true,
+                  ),
+                ),
                 onDelete: () async {
                   final confirmed = await _confirmDialog(context, entry.personName);
                   if (confirmed == true) {
@@ -259,6 +251,29 @@ class _DebitColumn extends StatelessWidget {
   }
 }
 
+// ── Empty state ───────────────────────────────────────────────────────────────
+class _EmptyState extends StatelessWidget {
+  const _EmptyState({required this.text});
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.inbox_outlined, size: 28, color: Theme.of(context).colorScheme.outline),
+            const SizedBox(height: 6),
+            Text(text, textAlign: TextAlign.center, style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.outline)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 // ── Outstanding card with settle button ──────────────────────────────────────
 class _OutstandingCard extends StatelessWidget {
   const _OutstandingCard({required this.entry, required this.ref, required this.date});
@@ -268,23 +283,25 @@ class _OutstandingCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Card(
+    return Container(
       margin: const EdgeInsets.symmetric(vertical: 3),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
-        side: BorderSide(color: Colors.red.shade700.withValues(alpha: 0.4), width: 1),
+      decoration: BoxDecoration(
+        color: Colors.red.shade700.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.red.shade700.withValues(alpha: 0.25)),
       ),
       child: Padding(
-        padding: const EdgeInsets.all(8),
+        padding: const EdgeInsets.all(10),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
                 Expanded(
-                  child: Text(entry.personName, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13), overflow: TextOverflow.ellipsis),
+                  child: Text(entry.personName, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13), overflow: TextOverflow.ellipsis),
                 ),
-                GestureDetector(
+                InkWell(
+                  borderRadius: BorderRadius.circular(20),
                   onTap: () async {
                     final confirmed = await showDialog<bool>(
                       context: context,
@@ -301,17 +318,30 @@ class _OutstandingCard extends StatelessWidget {
                       await ref.read(outstandingProvider(date).notifier).deleteEntry(entry.id);
                     }
                   },
-                  child: Icon(Icons.delete_outline, size: 14, color: Theme.of(context).colorScheme.outline),
+                  child: Padding(
+                    padding: const EdgeInsets.all(2),
+                    child: Icon(Icons.delete_outline, size: 15, color: Theme.of(context).colorScheme.outline),
+                  ),
                 ),
               ],
             ),
-            Text(formatRupees(entry.pendingAmount), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.red.shade700)),
+            const SizedBox(height: 2),
+            Text(formatRupees(entry.pendingAmount), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.red.shade700)),
             if (entry.isPartiallySettled)
-              Text('Partial: ${formatRupees(entry.settledAmount)} paid', style: const TextStyle(fontSize: 10, color: Colors.orange)),
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Text('Partial: ${formatRupees(entry.settledAmount)} paid', style: const TextStyle(fontSize: 10, color: Colors.orange)),
+              ),
             if (entry.note.isNotEmpty)
-              Text(entry.note, style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.outline)),
-            Text(DateFormat('dd MMM').format(entry.createdDate), style: TextStyle(fontSize: 10, color: Theme.of(context).colorScheme.outline)),
-            const SizedBox(height: 4),
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Text(entry.note, style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.outline), maxLines: 1, overflow: TextOverflow.ellipsis),
+              ),
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Text(DateFormat('dd MMM').format(entry.createdDate), style: TextStyle(fontSize: 10, color: Theme.of(context).colorScheme.outline)),
+            ),
+            const SizedBox(height: 6),
             SizedBox(
               width: double.infinity,
               child: OutlinedButton(
@@ -323,10 +353,12 @@ class _OutstandingCard extends StatelessWidget {
                 style: OutlinedButton.styleFrom(
                   foregroundColor: Colors.green.shade700,
                   side: BorderSide(color: Colors.green.shade700),
+                  minimumSize: const Size.fromHeight(32),
                   padding: const EdgeInsets.symmetric(vertical: 4),
                   visualDensity: VisualDensity.compact,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                 ),
-                child: const Text('Settle ✓', style: TextStyle(fontSize: 12)),
+                child: const Text('Settle ✓', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
               ),
             ),
           ],
@@ -338,34 +370,69 @@ class _OutstandingCard extends StatelessWidget {
 
 // ── Reusable widgets ─────────────────────────────────────────────────────────
 class _EntryCard extends StatelessWidget {
-  const _EntryCard({required this.name, required this.amount, required this.note, required this.color, required this.canDelete, this.onDelete});
+  const _EntryCard({
+    required this.name,
+    required this.amount,
+    required this.note,
+    required this.color,
+    required this.canEdit,
+    this.onEdit,
+    this.onDelete,
+  });
   final String name;
   final int amount;
   final String note;
   final Color color;
-  final bool canDelete;
+  final bool canEdit;
+  final VoidCallback? onEdit;
   final VoidCallback? onDelete;
 
   @override
   Widget build(BuildContext context) {
-    return Card(
+    return Container(
       margin: const EdgeInsets.symmetric(vertical: 3),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8), side: BorderSide(color: color.withValues(alpha: 0.3), width: 1)),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: canEdit && onEdit != null ? onEdit : null,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            child: Row(
               children: [
-                Expanded(child: Text(name, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13), overflow: TextOverflow.ellipsis)),
-                if (canDelete && onDelete != null)
-                  GestureDetector(onTap: onDelete, child: Icon(Icons.delete_outline, size: 14, color: Theme.of(context).colorScheme.outline)),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(name, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13), maxLines: 1, overflow: TextOverflow.ellipsis),
+                      const SizedBox(height: 2),
+                      Text(formatRupees(amount), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: color)),
+                      if (note.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 1),
+                          child: Text(note, style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.outline), maxLines: 1, overflow: TextOverflow.ellipsis),
+                        ),
+                    ],
+                  ),
+                ),
+                if (canEdit && onDelete != null)
+                  InkWell(
+                    borderRadius: BorderRadius.circular(20),
+                    onTap: onDelete,
+                    child: Padding(
+                      padding: const EdgeInsets.all(2),
+                      child: Icon(Icons.delete_outline, size: 15, color: Theme.of(context).colorScheme.outline),
+                    ),
+                  ),
               ],
             ),
-            Text(formatRupees(amount), style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: color)),
-            if (note.isNotEmpty) Text(note, style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.outline)),
-          ],
+          ),
         ),
       ),
     );
@@ -387,22 +454,22 @@ class _SectionLabel extends StatelessWidget {
 }
 
 class _ColHeader extends StatelessWidget {
-  const _ColHeader({required this.label, required this.color, required this.icon});
+  const _ColHeader({required this.label, required this.icon, required this.color});
   final String label;
-  final Color color;
   final IconData icon;
+  final Color color;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(8)),
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, color: Colors.white, size: 13),
-          const SizedBox(width: 4),
-          Text(label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)),
+          Icon(icon, color: color, size: 14),
+          const SizedBox(width: 5),
+          Text(label, style: TextStyle(color: color, fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 0.4)),
         ],
       ),
     );
@@ -421,7 +488,11 @@ class _SummaryBar extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.all(12),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(color: Theme.of(context).colorScheme.surfaceContainerHighest, borderRadius: BorderRadius.circular(12)),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppTheme.primary.withValues(alpha: 0.1)),
+      ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
@@ -465,8 +536,8 @@ class _NetBalanceFooter extends StatelessWidget {
     final color = isPositive ? Colors.green.shade700 : Colors.red.shade700;
     return Container(
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.primaryContainer,
-        border: Border(top: BorderSide(color: Theme.of(context).colorScheme.outline, width: 0.5)),
+        color: AppTheme.primary.withValues(alpha: 0.08),
+        border: Border(top: BorderSide(color: AppTheme.primary.withValues(alpha: 0.15), width: 1)),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
       child: Row(
@@ -475,8 +546,8 @@ class _NetBalanceFooter extends StatelessWidget {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('NET BALANCE', style: TextStyle(fontSize: 11, letterSpacing: 1.2, color: Theme.of(context).colorScheme.onPrimaryContainer)),
-              Text('Credit − Debit', style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onPrimaryContainer.withValues(alpha: 0.6))),
+              Text('NET BALANCE', style: TextStyle(fontSize: 11, letterSpacing: 1.2, color: Theme.of(context).colorScheme.onSurfaceVariant)),
+              Text('Credit − Debit', style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.7))),
             ],
           ),
           Text('${isPositive ? '+' : ''}${formatRupees(netBalance)}', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: color)),

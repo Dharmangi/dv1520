@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../core/utils/currency.dart';
 import '../../providers/daily_silak_provider.dart';
+import 'add_daily_silak_entry_sheet.dart';
+import 'add_outstanding_sheet.dart';
 import 'daily_silak_detail_screen.dart';
 
 class DailySilakListScreen extends ConsumerWidget {
@@ -50,10 +52,24 @@ class DailySilakListScreen extends ConsumerWidget {
           return RefreshIndicator(
             onRefresh: () => ref.read(dailySilakListProvider.notifier).refresh(),
             child: ListView.builder(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              itemCount: list.length,
+              padding: const EdgeInsets.only(top: 8, bottom: 8),
+              itemCount: list.length + 1,
               itemBuilder: (context, i) {
-                final item = list[i];
+                if (i == 0) {
+                  return _QuickAddBar(
+                    onAddCredit: () => showModalBottomSheet(
+                      context: context,
+                      isScrollControlled: true,
+                      builder: (_) => AddDailySilakEntrySheet(date: today, initialType: 'received', allowDateChange: true),
+                    ),
+                    onAddDebit: () => showModalBottomSheet(
+                      context: context,
+                      isScrollControlled: true,
+                      builder: (_) => AddOutstandingSheet(date: today, allowDateChange: true),
+                    ),
+                  );
+                }
+                final item = list[i - 1];
                 final dateStr = DateFormat('yyyy-MM-dd').format(item.date);
                 final displayDate = DateFormat('dd MMM yyyy, EEEE').format(item.date);
                 final isToday = dateStr == today;
@@ -130,5 +146,70 @@ class DailySilakListScreen extends ConsumerWidget {
       final dateStr = DateFormat('yyyy-MM-dd').format(picked);
       _openDate(context, dateStr);
     }
+  }
+}
+
+class _QuickAddBar extends StatelessWidget {
+  const _QuickAddBar({required this.onAddCredit, required this.onAddDebit});
+  final VoidCallback onAddCredit;
+  final VoidCallback onAddDebit;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
+      child: Row(
+        children: [
+          Expanded(
+            child: _QuickAddButton(
+              label: 'Add Credit',
+              icon: Icons.arrow_downward_rounded,
+              color: Colors.green.shade700,
+              onTap: onAddCredit,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: _QuickAddButton(
+              label: 'Add Debit',
+              icon: Icons.arrow_upward_rounded,
+              color: Colors.red.shade700,
+              onTap: onAddDebit,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _QuickAddButton extends StatelessWidget {
+  const _QuickAddButton({required this.label, required this.icon, required this.color, required this.onTap});
+  final String label;
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: color,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, color: Colors.white, size: 18),
+              const SizedBox(width: 8),
+              Text(label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 14)),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
