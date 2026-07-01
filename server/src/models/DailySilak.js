@@ -8,8 +8,6 @@ const dailySilakEntrySchema = new mongoose.Schema(
     type: { type: String, enum: ['received', 'paid'], required: true },
     note: { type: String, default: '' },
     havalaId: { type: mongoose.Schema.Types.ObjectId, ref: 'Havala', default: null },
-    isPending: { type: Boolean, default: false },
-    isSettlement: { type: Boolean, default: false },
   },
   { _id: true }
 );

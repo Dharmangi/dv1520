@@ -5,11 +5,14 @@
 ◇ injected env (3) from .env // tip: ◈ secrets for agents [www.dotenvx.com]
 MongoDB connected
 Server running on port 4000
-[0mPOST /api/daily-silak/2026-07-01/sync [32m200[0m 99.941 ms - 2185[0m
-[0mGET /api/dashboard/summary [32m200[0m 42.318 ms - 153[0m
-[0mGET /api/dashboard/range-summary [32m200[0m 70.658 ms - 58[0m
-[0mGET /api/havala [32m200[0m 104.166 ms - 4808[0m
-[0mGET /api/daily-silak [32m200[0m 315.154 ms - 2211[0m
-[0mGET /api/people [32m200[0m 341.125 ms - 5056[0m
-[0mGET /api/daily-silak/by-date?date=2026-07-01 [32m200[0m 34.312 ms - 2185[0m
-[0mGET /api/outstanding?date=2026-07-01 [32m200[0m 130.686 ms - 4251[0m
+[0mGET /api/daily-silak/by-date?date=2026-07-01 [32m200[0m 46.482 ms - 2185[0m
+[0mGET /api/dashboard/summary [32m200[0m 37.787 ms - 153[0m
+[0mGET /api/daily-silak [32m200[0m 47.959 ms - 2211[0m
+[0mGET /api/dashboard/range-summary [32m200[0m 50.692 ms - 58[0m
+[0mGET /api/people [32m200[0m 334.373 ms - 5056[0m
+[0mGET /api/havala [32m200[0m 343.197 ms - 4808[0m
+[0mGET /api/dashboard/summary [32m200[0m 45.616 ms - 153[0m
+[0mGET /api/people [32m200[0m 78.283 ms - 5056[0m
+[0mGET /api/havala [32m200[0m 80.324 ms - 4808[0m
+[0mGET /api/daily-silak [32m200[0m 277.074 ms - 2211[0m
+[0mGET /api/dashboard/range-summary [32m200[0m 277.367 ms - 58[0m

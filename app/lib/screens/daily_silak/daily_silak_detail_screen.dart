@@ -26,14 +26,14 @@ class DailySilakDetailScreen extends ConsumerWidget {
         title: Text(displayDate),
         actions: [
           IconButton(
-            icon: const Icon(Icons.sync),
-            tooltip: 'Sync from Havalas',
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Refresh',
             onPressed: asyncSilak.hasValue
                 ? () async {
                     await ref.read(dailySilakByDateProvider(date).notifier).sync();
                     if (context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Synced from Havala records')),
+                        const SnackBar(content: Text('Refreshed')),
                       );
                     }
                   }
