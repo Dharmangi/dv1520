@@ -127,7 +127,7 @@ jobs:
           echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > "$KEYSTORE_PATH"
 
           cat > "$GITHUB_WORKSPACE/app/android/key.properties" <<EOF
-          storeFile=app/release.jks
+          storeFile=$KEYSTORE_PATH
           storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
           keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
