@@ -293,16 +293,10 @@ class _AddHavalaScreenState extends ConsumerState<AddHavalaScreen> {
             children: [
               Expanded(
                 flex: 3,
-                child: DropdownButtonFormField<Person>(
-                  initialValue: split.customer,
-                  decoration: const InputDecoration(labelText: 'Customer', border: OutlineInputBorder()),
-                  items: customers
-                      .map((c) => DropdownMenuItem(
-                            value: c,
-                            child: Text(c.place != null ? '${c.name} (${c.place})' : c.name),
-                          ))
-                      .toList(),
-                  onChanged: (c) => setState(() => split.customer = c),
+                child: _CustomerAutocomplete(
+                  customers: customers,
+                  selected: split.customer,
+                  onSelected: (c) => setState(() => split.customer = c),
                 ),
               ),
               const SizedBox(width: 8),
@@ -347,6 +341,63 @@ class _AddHavalaScreenState extends ConsumerState<AddHavalaScreen> {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _CustomerAutocomplete extends StatelessWidget {
+  const _CustomerAutocomplete({required this.customers, required this.selected, required this.onSelected});
+
+  final List<Person> customers;
+  final Person? selected;
+  final ValueChanged<Person?> onSelected;
+
+  static String _label(Person p) => p.place != null ? '${p.name} (${p.place})' : p.name;
+
+  @override
+  Widget build(BuildContext context) {
+    return Autocomplete<Person>(
+      initialValue: TextEditingValue(text: selected != null ? _label(selected!) : ''),
+      displayStringForOption: _label,
+      optionsBuilder: (textEditingValue) {
+        final query = textEditingValue.text.trim().toLowerCase();
+        if (query.isEmpty) return customers;
+        return customers.where((c) => _label(c).toLowerCase().contains(query));
+      },
+      onSelected: onSelected,
+      fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
+        return TextFormField(
+          controller: controller,
+          focusNode: focusNode,
+          decoration: const InputDecoration(labelText: 'Customer', border: OutlineInputBorder()),
+          onChanged: (v) {
+            if (v.isEmpty) onSelected(null);
+          },
+        );
+      },
+      optionsViewBuilder: (context, onSelectedOption, options) {
+        return Align(
+          alignment: Alignment.topLeft,
+          child: Material(
+            elevation: 4,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 250, minWidth: 200),
+              child: ListView.builder(
+                padding: EdgeInsets.zero,
+                shrinkWrap: true,
+                itemCount: options.length,
+                itemBuilder: (context, index) {
+                  final option = options.elementAt(index);
+                  return ListTile(
+                    title: Text(_label(option)),
+                    onTap: () => onSelectedOption(option),
+                  );
+                },
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }
