@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const controller = require('../controllers/transactionsController');
 
+router.get('/statement', controller.statement);
 router.get('/', controller.list);
 router.post('/', controller.create);
 router.put('/:id', controller.update);

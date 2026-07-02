@@ -1,4 +1,5 @@
 const Transaction = require('../models/Transaction');
+const DailySilak = require('../models/DailySilak');
 
 exports.list = async (req, res) => {
   const { personId, categoryId, from, to, page = 1, limit = 50 } = req.query;
@@ -19,6 +20,62 @@ exports.list = async (req, res) => {
     .populate('categoryId', 'name type');
 
   res.json(transactions);
+};
+
+// GET /transactions/statement?personId=&from=&to=
+// Combines Transaction records (havala-linked) with manual Daily Silak entries for a person.
+exports.statement = async (req, res) => {
+  const { personId, from, to } = req.query;
+  if (!personId) return res.status(400).json({ error: 'personId is required' });
+
+  const dateFilter = {};
+  if (from) dateFilter.$gte = new Date(from);
+  if (to) dateFilter.$lte = new Date(to);
+
+  const txnFilter = { isDeleted: false, personId, status: 'confirmed' };
+  if (from || to) txnFilter.date = dateFilter;
+
+  const transactions = await Transaction.find(txnFilter).sort({ date: 1 });
+
+  const pendingFilter = { isDeleted: false, personId, status: 'pending' };
+  if (from || to) pendingFilter.date = dateFilter;
+  const pendingTransactions = await Transaction.find(pendingFilter);
+  const pendingAmount = pendingTransactions.reduce(
+    (sum, t) => sum + (t.type === 'received' ? t.amount : -t.amount),
+    0,
+  );
+
+  const silakFilter = { isDeleted: false, 'entries.personId': personId };
+  if (from || to) silakFilter.date = dateFilter;
+  const silakDocs = await DailySilak.find(silakFilter);
+
+  const manualEntries = [];
+  for (const silak of silakDocs) {
+    for (const entry of silak.entries) {
+      if (!entry.personId || String(entry.personId) !== String(personId)) continue;
+      if (entry.havalaId) continue; // already represented via Transaction
+      manualEntries.push({
+        date: silak.date,
+        type: entry.type,
+        amount: entry.amount,
+        paymentMode: 'cash',
+        description: entry.note || '',
+      });
+    }
+  }
+
+  const combined = [
+    ...transactions.map((t) => ({
+      date: t.date,
+      type: t.type,
+      amount: t.amount,
+      paymentMode: t.paymentMode,
+      description: t.description || '',
+    })),
+    ...manualEntries,
+  ].sort((a, b) => new Date(a.date) - new Date(b.date));
+
+  res.json({ entries: combined, pendingAmount });
 };
 
 exports.create = async (req, res) => {

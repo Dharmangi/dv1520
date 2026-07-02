@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/network/api_client.dart';
+import '../models/statement_entry.dart';
 import '../models/transaction.dart';
 
 final transactionsProvider =
@@ -12,6 +13,14 @@ final personTransactionsProvider =
     'limit': 200,
   });
   return (res.data as List).map((e) => Txn.fromJson(e as Map<String, dynamic>)).toList();
+});
+
+final personStatementProvider =
+    FutureProvider.family<Statement, String>((ref, personId) async {
+  final res = await ApiClient.instance.dio.get('/transactions/statement', queryParameters: {
+    'personId': personId,
+  });
+  return Statement.fromJson(res.data as Map<String, dynamic>);
 });
 
 class TransactionsNotifier extends AsyncNotifier<List<Txn>> {

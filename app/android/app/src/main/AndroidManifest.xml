@@ -3,7 +3,7 @@
     <!-- Required to launch the system package installer for the downloaded update APK. -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>
     <application
-        android:label="dv1520_app"
+        android:label="DV.1520"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:usesCleartextTraffic="true">

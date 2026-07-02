@@ -18,7 +18,7 @@ class DashboardScreen extends ConsumerWidget {
     final peopleAsync = ref.watch(peopleProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('DV1520')),
+      appBar: AppBar(title: const Text('DV.1520')),
       body: RefreshIndicator(
         onRefresh: () async {
           ref.invalidate(dashboardProvider);

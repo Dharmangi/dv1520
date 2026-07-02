@@ -1,13 +1,20 @@
+import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:open_filex/open_filex.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
-import '../../core/utils/currency.dart';
+import 'package:intl/intl.dart';
 import '../../models/person.dart';
-import '../../models/transaction.dart';
+import '../../models/statement_entry.dart';
 import '../../providers/people_provider.dart';
 import '../../providers/transactions_provider.dart';
+
+final _pdfAmountFormat = NumberFormat.currency(locale: 'en_IN', symbol: 'Rs. ', decimalDigits: 0);
+String _formatRupeesForPdf(int paise) => _pdfAmountFormat.format(paise / 100);
 
 class ExportPdfScreen extends ConsumerStatefulWidget {
   const ExportPdfScreen({super.key});
@@ -50,19 +57,26 @@ class _ExportPdfScreenState extends ConsumerState<ExportPdfScreen> {
 
     setState(() => _generating = true);
     try {
-      final allTxns = await ref.read(personTransactionsProvider(_selectedPerson!.id).future);
-      final txns = allTxns.where((t) {
+      final statement = await ref.read(personStatementProvider(_selectedPerson!.id).future);
+      final txns = statement.entries.where((t) {
         if (_from != null && t.date.isBefore(_from!)) return false;
         if (_to != null && t.date.isAfter(_to!.add(const Duration(days: 1)))) return false;
         return true;
       }).toList()
         ..sort((a, b) => a.date.compareTo(b.date));
 
-      final doc = _buildDocument(_selectedPerson!, txns);
-      await Printing.sharePdf(
-        bytes: await doc.save(),
-        filename: '${_selectedPerson!.name.replaceAll(' ', '_')}_statement.pdf',
-      );
+      final doc = _buildDocument(_selectedPerson!, txns, statement.pendingAmount);
+      final bytes = await doc.save();
+      if (mounted) {
+        await Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => _PdfPreviewScreen(
+              bytes: bytes,
+              filename: '${_selectedPerson!.name.replaceAll(' ', '_')}_statement.pdf',
+            ),
+          ),
+        );
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to generate PDF: $e')));
@@ -72,7 +86,7 @@ class _ExportPdfScreenState extends ConsumerState<ExportPdfScreen> {
     }
   }
 
-  pw.Document _buildDocument(Person person, List<Txn> txns) {
+  pw.Document _buildDocument(Person person, List<StatementEntry> txns, int pendingAmount) {
     final doc = pw.Document();
     final balance = txns.fold<int>(0, (sum, t) => sum + (t.type == 'received' ? t.amount : -t.amount));
 
@@ -93,9 +107,9 @@ class _ExportPdfScreenState extends ConsumerState<ExportPdfScreen> {
                 .map((t) => [
                       _formatDate(t.date),
                       t.type == 'received' ? 'Received' : 'Paid',
-                      formatRupees(t.amount),
+                      _formatRupeesForPdf(t.amount),
                       t.paymentMode,
-                      t.description ?? '',
+                      t.description,
                     ])
                 .toList(),
             headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold),
@@ -106,10 +120,18 @@ class _ExportPdfScreenState extends ConsumerState<ExportPdfScreen> {
           pw.Align(
             alignment: pw.Alignment.centerRight,
             child: pw.Text(
-              'Balance: ${formatRupees(balance)}',
+              'Balance: ${_formatRupeesForPdf(balance)}',
               style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold),
             ),
           ),
+          if (pendingAmount != 0)
+            pw.Align(
+              alignment: pw.Alignment.centerRight,
+              child: pw.Text(
+                'Pending: ${_formatRupeesForPdf(pendingAmount)}',
+                style: pw.TextStyle(fontSize: 13, color: PdfColors.orange800, fontWeight: pw.FontWeight.bold),
+              ),
+            ),
         ],
       ),
     );
@@ -168,10 +190,73 @@ class _ExportPdfScreenState extends ConsumerState<ExportPdfScreen> {
               icon: _generating
                   ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2))
                   : const Icon(Icons.picture_as_pdf),
-              label: const Text('Generate & Share PDF'),
+              label: const Text('Generate PDF'),
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _PdfPreviewScreen extends StatefulWidget {
+  const _PdfPreviewScreen({required this.bytes, required this.filename});
+
+  final Uint8List bytes;
+  final String filename;
+
+  @override
+  State<_PdfPreviewScreen> createState() => _PdfPreviewScreenState();
+}
+
+class _PdfPreviewScreenState extends State<_PdfPreviewScreen> {
+  bool _downloading = false;
+
+  Future<void> _download() async {
+    setState(() => _downloading = true);
+    try {
+      final dir = await getExternalStorageDirectory();
+      final path = '${dir!.path}/${widget.filename}';
+      final file = File(path);
+      await file.writeAsBytes(widget.bytes);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Saved to ${file.path}'),
+            action: SnackBarAction(label: 'Open', onPressed: () => OpenFilex.open(path)),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to save: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _downloading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(widget.filename),
+        actions: [
+          IconButton(
+            icon: _downloading
+                ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                : const Icon(Icons.download),
+            tooltip: 'Download',
+            onPressed: _downloading ? null : _download,
+          ),
+        ],
+      ),
+      body: PdfPreview(
+        build: (format) => widget.bytes,
+        initialPageFormat: PdfPageFormat.a4,
+        canChangeOrientation: false,
+        canChangePageFormat: false,
+        pdfFileName: widget.filename,
       ),
     );
   }

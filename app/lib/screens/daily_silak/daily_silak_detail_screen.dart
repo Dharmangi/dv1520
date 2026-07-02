@@ -7,6 +7,7 @@ import '../../models/daily_silak.dart';
 import '../../models/outstanding_entry.dart';
 import '../../providers/daily_silak_provider.dart';
 import '../../providers/outstanding_provider.dart';
+import '../settings/export_pdf_screen.dart';
 import 'add_daily_silak_entry_sheet.dart';
 import 'settle_outstanding_sheet.dart';
 
@@ -25,6 +26,13 @@ class DailySilakDetailScreen extends ConsumerWidget {
       appBar: AppBar(
         title: Text(displayDate),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.picture_as_pdf_outlined),
+            tooltip: 'Export PDF',
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const ExportPdfScreen()),
+            ),
+          ),
           IconButton(
             icon: const Icon(Icons.refresh),
             tooltip: 'Refresh',
@@ -102,9 +110,6 @@ class DailySilakDetailScreen extends ConsumerWidget {
                     ],
                   ),
                 ),
-
-                // Net balance footer
-                _NetBalanceFooter(netBalance: netBalance),
               ],
             );
           },
@@ -522,37 +527,6 @@ class _SummaryItem extends StatelessWidget {
         const SizedBox(height: 4),
         Text('$prefix${formatRupees(amount)}', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: color)),
       ],
-    );
-  }
-}
-
-class _NetBalanceFooter extends StatelessWidget {
-  const _NetBalanceFooter({required this.netBalance});
-  final int netBalance;
-
-  @override
-  Widget build(BuildContext context) {
-    final isPositive = netBalance >= 0;
-    final color = isPositive ? Colors.green.shade700 : Colors.red.shade700;
-    return Container(
-      decoration: BoxDecoration(
-        color: AppTheme.primary.withValues(alpha: 0.08),
-        border: Border(top: BorderSide(color: AppTheme.primary.withValues(alpha: 0.15), width: 1)),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('NET BALANCE', style: TextStyle(fontSize: 11, letterSpacing: 1.2, color: Theme.of(context).colorScheme.onSurfaceVariant)),
-              Text('Credit − Debit', style: TextStyle(fontSize: 11, color: Theme.of(context).colorScheme.onSurfaceVariant.withValues(alpha: 0.7))),
-            ],
-          ),
-          Text('${isPositive ? '+' : ''}${formatRupees(netBalance)}', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: color)),
-        ],
-      ),
     );
   }
 }
