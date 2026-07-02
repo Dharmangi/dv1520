@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/theme/app_theme.dart';
+import 'providers/update_provider.dart';
 import 'screens/dashboard/dashboard_screen.dart';
 import 'screens/havala/havala_list_screen.dart';
 import 'screens/daily_silak/daily_silak_list_screen.dart';
 import 'screens/settings/settings_screen.dart';
+import 'widgets/update_dialog.dart';
 
 class DV1520App extends StatelessWidget {
   const DV1520App({super.key});
@@ -19,14 +22,14 @@ class DV1520App extends StatelessWidget {
   }
 }
 
-class RootShell extends StatefulWidget {
+class RootShell extends ConsumerStatefulWidget {
   const RootShell({super.key});
 
   @override
-  State<RootShell> createState() => _RootShellState();
+  ConsumerState<RootShell> createState() => _RootShellState();
 }
 
-class _RootShellState extends State<RootShell> {
+class _RootShellState extends ConsumerState<RootShell> {
   int _index = 0;
 
   static const _screens = [
@@ -35,6 +38,25 @@ class _RootShellState extends State<RootShell> {
     DailySilakListScreen(),
     SettingsScreen(),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _checkForUpdate());
+  }
+
+  Future<void> _checkForUpdate() async {
+    try {
+      final updateAvailable = await ref.read(updateAvailableProvider.future);
+      if (!updateAvailable || !mounted) return;
+      final versionInfo = await ref.read(latestVersionProvider.future);
+      if (!mounted) return;
+      await showUpdateDialog(context, versionInfo);
+    } catch (_) {
+      // Update check is best-effort; silently ignore network/server errors
+      // so a flaky connection never blocks app startup.
+    }
+  }
 
   @override
   Widget build(BuildContext context) {

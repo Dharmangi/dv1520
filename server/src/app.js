@@ -3,6 +3,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const requireApiKey = require('./middleware/auth');
+const versionRoutes = require('./routes/version');
 const peopleRoutes = require('./routes/people');
 const transactionsRoutes = require('./routes/transactions');
 const dashboardRoutes = require('./routes/dashboard');
@@ -20,6 +21,10 @@ app.use(morgan('dev'));
 app.use(express.json());
 
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
+
+// Public: the app must be able to check for updates before/without a valid API key
+// (e.g. if the key ever rotates, older clients still need a path to discover the update).
+app.use('/api/version', versionRoutes);
 
 app.use(requireApiKey);
 app.use('/api/people', peopleRoutes);

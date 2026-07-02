@@ -17,8 +17,7 @@ class ApiClient {
 
   static const String _baseUrlPrefKey = 'api_base_url';
 
-  // Use 10.0.2.2 for the Android emulator, or your computer's LAN IP for a Wi-Fi connected device.
-  static const String defaultBaseUrl = 'http://192.168.1.6:4000/api';
+  static const String defaultBaseUrl = 'https://dv1520.onrender.com/api';
   static const String apiKey = 'dv1520-9f3a7c1e4b2d6f8a0c5e9b3d7f1a4c8e';
 
   late final Dio _dio;
