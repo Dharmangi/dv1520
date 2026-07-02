@@ -27,6 +27,7 @@ class UpdateDialog extends ConsumerWidget {
     final isDownloading = downloadState.status == UpdateDownloadStatus.downloading;
     final isReady = downloadState.status == UpdateDownloadStatus.readyToInstall;
     final hasError = downloadState.status == UpdateDownloadStatus.error;
+    final notesLines = versionInfo.releaseNotesLines;
 
     return PopScope(
       canPop: !versionInfo.forceUpdate,
@@ -53,7 +54,7 @@ class UpdateDialog extends ConsumerWidget {
                 color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
-            if (versionInfo.releaseNotes.isNotEmpty) ...[
+            if (notesLines.isNotEmpty) ...[
               const SizedBox(height: 16),
               Text("What's new", style: theme.textTheme.labelLarge),
               const SizedBox(height: 6),
@@ -64,9 +65,15 @@ class UpdateDialog extends ConsumerWidget {
                   color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Text(
-                  versionInfo.releaseNotes,
-                  style: theme.textTheme.bodyMedium,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    for (final line in notesLines)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 4),
+                        child: Text('•  $line', style: theme.textTheme.bodyMedium),
+                      ),
+                  ],
                 ),
               ),
             ],
@@ -96,6 +103,11 @@ class UpdateDialog extends ConsumerWidget {
         ),
         actionsAlignment: MainAxisAlignment.center,
         actions: [
+          if (!versionInfo.forceUpdate && isDownloading)
+            TextButton(
+              onPressed: () => ref.read(updateDownloadProvider.notifier).cancelDownload(),
+              child: const Text('Cancel'),
+            ),
           if (!versionInfo.forceUpdate && !isDownloading)
             TextButton(
               onPressed: () => Navigator.of(context).pop(),

@@ -1,10 +1,17 @@
 name: Build and Release Android APK
 
-# Trigger: run every time a commit is pushed to main.
+# Trigger: run every time a commit is pushed to main. Can also be run manually
+# (e.g. to force-push an update prompt to all users via force_update).
 on:
   push:
     branches:
       - main
+  workflow_dispatch:
+    inputs:
+      force_update:
+        description: "Force all users to update to this release (no Skip/Later button)"
+        type: boolean
+        default: false
 
 # Only one release build should run at a time; cancel superseded runs
 # so an older push can't overwrite a release created by a newer one.
@@ -158,6 +165,7 @@ jobs:
       #     exists) and upload app-release.apk as a release asset.
       # ------------------------------------------------------------------
       - name: Create or update GitHub Release
+        id: release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.tag }}
@@ -166,5 +174,69 @@ jobs:
           # softprops/action-gh-release updates the existing release for this
           # tag (replacing assets) instead of failing if it already exists.
           make_latest: true
+          # Auto-summarize commits/PRs since the last release for the GitHub
+          # Releases page. This is the SAME text passed to the backend below,
+          # so it also becomes the in-app "What's new" content — no separate
+          # manual release-notes authoring step.
+          generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # ------------------------------------------------------------------
+      # 12. Fail fast if the backend-sync secrets are not configured, same
+      #     rationale as the signing-secrets check above: never silently skip
+      #     the sync and leave the backend serving a stale version.
+      #     Required repository secrets:
+      #       BACKEND_URL           - e.g. https://dv1520.onrender.com (no /api suffix)
+      #       INTERNAL_UPDATE_TOKEN - must equal the backend's INTERNAL_UPDATE_TOKEN env var
+      # ------------------------------------------------------------------
+      - name: Verify backend sync secrets are configured
+        run: |
+          missing=()
+          [ -z "${{ secrets.BACKEND_URL }}" ] && missing+=("BACKEND_URL")
+          [ -z "${{ secrets.INTERNAL_UPDATE_TOKEN }}" ] && missing+=("INTERNAL_UPDATE_TOKEN")
+          if [ ${#missing[@]} -ne 0 ]; then
+            echo "::error::Backend version sync is not configured. Missing repository secrets: ${missing[*]}"
+            echo "::error::See README.md 'Automatic version sync' section for setup instructions."
+            exit 1
+          fi
+          echo "All required backend sync secrets are present."
+
+      # ------------------------------------------------------------------
+      # 13. Sync the new version to the backend so GET /api/version reflects
+      #     this release immediately — no manual edit of backend env vars.
+      #     forceUpdate defaults to false; the only way to set it true is the
+      #     workflow_dispatch "force_update" input, so a normal push-to-main
+      #     release never force-updates users by accident.
+      # ------------------------------------------------------------------
+      - name: Sync version to backend
+        env:
+          BACKEND_URL: ${{ secrets.BACKEND_URL }}
+          INTERNAL_UPDATE_TOKEN: ${{ secrets.INTERNAL_UPDATE_TOKEN }}
+          RELEASE_NOTES: ${{ steps.release.outputs.body }}
+          FORCE_UPDATE: ${{ github.event.inputs.force_update || 'false' }}
+        run: |
+          APK_URL="https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.tag }}/app-release.apk"
+
+          jq -n \
+            --arg version "${{ steps.version.outputs.version_name }}" \
+            --arg apkUrl "$APK_URL" \
+            --argjson forceUpdate "$FORCE_UPDATE" \
+            --arg releaseNotes "$RELEASE_NOTES" \
+            '{version: $version, apkUrl: $apkUrl, forceUpdate: $forceUpdate, releaseNotes: $releaseNotes}' \
+            > /tmp/update-version-payload.json
+
+          http_status=$(curl -s -o /tmp/update-version-response.json -w "%{http_code}" \
+            -X POST "$BACKEND_URL/internal/update-version" \
+            -H "Authorization: Bearer $INTERNAL_UPDATE_TOKEN" \
+            -H "Content-Type: application/json" \
+            --data @/tmp/update-version-payload.json)
+
+          echo "Backend responded with HTTP $http_status:"
+          cat /tmp/update-version-response.json
+
+          if [ "$http_status" -lt 200 ] || [ "$http_status" -ge 300 ]; then
+            echo "::error::Backend version sync failed with HTTP $http_status"
+            exit 1
+          fi
+          echo "Backend version sync succeeded."

@@ -36,10 +36,10 @@ release APK and publishes it as a GitHub Release.
 
 ### Android release signing setup (required)
 
-This project's release build type is not signed yet — `android/app/build.gradle.kts` currently
-falls back to the debug key for local `flutter run --release` builds. Before the workflow can
-build a real release, add these four **repository secrets** under
-**Settings → Secrets and variables → Actions**:
+`android/app/build.gradle.kts` reads `android/key.properties` to sign release builds, falling
+back to the debug key only when that file is absent (e.g. plain local `flutter run --release`
+without signing set up). In CI, `key.properties` is generated from secrets before every build.
+Add these four **repository secrets** under **Settings → Secrets and variables → Actions**:
 
 | Secret | Where it comes from |
 | --- | --- |
@@ -82,3 +82,72 @@ keyPassword=yourKeyPassword
 - **Build succeeds locally but fails in CI on signing** — verify the base64 in
   `ANDROID_KEYSTORE_BASE64` has no line breaks (`base64 -w0`), and that alias/passwords match
   exactly what was used with `keytool`.
+
+## Automatic in-app update system
+
+Since this app isn't published on the Play Store, users install the APK manually. To give them a
+Play-Store-like experience, the app checks a backend endpoint on startup and prompts to update if
+a newer version is available — with no manual step required after a release ships.
+
+### How a release reaches users
+
+1. You bump `version:` in `pubspec.yaml` and push to `main` (same as above).
+2. The workflow builds and signs the APK, creates/updates the GitHub Release, and (new) also
+   generates GitHub's auto-summarized release notes (`generate_release_notes: true`) from the
+   commits/PRs since the last release.
+3. A new workflow step, **"Sync version to backend"**, calls
+   `POST <BACKEND_URL>/internal/update-version` with the new version, the GitHub Releases
+   download URL for `app-release.apk`, `forceUpdate` (see below), and the release notes text from
+   step 2 — the same text used for both the GitHub Releases page and the in-app "What's new"
+   dialog.
+4. The backend persists this in a single `AppVersion` document in MongoDB (source of truth —
+   no redeploy needed to pick up a new version, unlike an env-var-only approach).
+5. The next time the app launches, it calls `GET /api/version`, compares versions, and — if
+   newer — shows the update dialog.
+
+### Backend version storage
+
+- `server/src/models/AppVersion.js` — a singleton Mongo document (fixed `_id: "latest"`).
+- `server/src/services/appVersionService.js` — `getLatestVersion()` reads the Mongo doc, falling
+  back to the `APP_LATEST_VERSION`/`APP_APK_URL`/`APP_FORCE_UPDATE`/`APP_RELEASE_NOTES` env vars
+  only if no doc exists yet (e.g. a fresh database before the first CI sync has run).
+  `upsertLatestVersion(...)` writes the doc.
+- `GET /api/version` (public, no API key) returns `{version, apkUrl, forceUpdate, releaseNotes}`
+  from the service above.
+- `POST /internal/update-version` (called only by CI) writes the new version. It is protected by
+  its own bearer token — **not** the app's `x-api-key` — via
+  `server/src/middleware/internalAuth.js`, checked against the `INTERNAL_UPDATE_TOKEN` env var.
+
+**Required secrets for the sync step**, alongside the four signing secrets:
+
+| Secret | Value |
+| --- | --- |
+| `BACKEND_URL` | e.g. `https://dv1520.onrender.com` (no `/api` suffix, no trailing slash) |
+| `INTERNAL_UPDATE_TOKEN` | A long random value — must be set identically as a Render/backend env var of the same name |
+
+Generate a token with `openssl rand -hex 32` (or any long random string) and set it in both
+places; it never ships inside the app or the APK.
+
+### Force update vs. optional update
+
+- `forceUpdate` is **never** set to `true` automatically by a normal push-to-main release — it
+  always syncs as `false`, so shipping a routine update never locks anyone out by accident.
+- To force all users onto a specific release (e.g. a critical fix), manually run the workflow via
+  **Actions → Build and Release Android APK → Run workflow**, and set the `force_update` input to
+  `true`. This re-runs the same pipeline (rebuild + re-sync) with `forceUpdate: true`.
+- In the app, `forceUpdate: true` makes the update dialog non-dismissible — no back button, no
+  tap-outside, no "Later" or "Cancel" button. The user must download and install before
+  continuing. `forceUpdate: false` shows "Later" (dismiss) and, mid-download, "Cancel".
+
+### Flutter update module (`app/lib/update/`)
+
+| Folder | Purpose |
+| --- | --- |
+| `models/` | `AppVersionInfo` — parses the `/version` response; `releaseNotesLines` splits it into bullet points for display. |
+| `repositories/` | `UpdateRepository` — the one network call (`GET /version`), isolated from business logic. |
+| `services/` | `UpdateService` — version comparison, APK download (with cancellation support), and launching the Android installer. |
+| `providers/` | Riverpod providers: `latestVersionProvider`, `updateAvailableProvider`, and `updateDownloadProvider` (drives the download/install state machine, including cancel). |
+| `widgets/` | `UpdateDialog` — the Material 3 dialog shown from `RootShell` on startup (`app/lib/app.dart`). |
+
+There's no dedicated update **screen** — the whole experience is a modal dialog shown over
+whatever screen the app opened to, matching the existing UX.

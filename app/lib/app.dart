@@ -1,12 +1,13 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/theme/app_theme.dart';
-import 'providers/update_provider.dart';
 import 'screens/dashboard/dashboard_screen.dart';
 import 'screens/havala/havala_list_screen.dart';
 import 'screens/daily_silak/daily_silak_list_screen.dart';
 import 'screens/settings/settings_screen.dart';
-import 'widgets/update_dialog.dart';
+import 'update/providers/update_provider.dart';
+import 'update/widgets/update_dialog.dart';
 
 class DV1520App extends StatelessWidget {
   const DV1520App({super.key});
@@ -14,7 +15,7 @@ class DV1520App extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'DV1520',
+      title: 'DV.1520',
       theme: AppTheme.light,
       themeMode: ThemeMode.light,
       home: const RootShell(),
@@ -32,11 +33,11 @@ class RootShell extends ConsumerStatefulWidget {
 class _RootShellState extends ConsumerState<RootShell> {
   int _index = 0;
 
-  static const _screens = [
-    DashboardScreen(),
-    HavalaListScreen(),
-    DailySilakListScreen(),
-    SettingsScreen(),
+  static final _screens = [
+    const DashboardScreen(),
+    const HavalaListScreen(),
+    const DailySilakListScreen(),
+    if (kDebugMode) const SettingsScreen(),
   ];
 
   @override
@@ -65,11 +66,11 @@ class _RootShellState extends ConsumerState<RootShell> {
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,
         onDestinationSelected: (i) => setState(() => _index = i),
-        destinations: const [
-          NavigationDestination(icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard), label: 'Dashboard'),
-          NavigationDestination(icon: Icon(Icons.swap_horiz_outlined), selectedIcon: Icon(Icons.swap_horiz), label: 'Havala'),
-          NavigationDestination(icon: Icon(Icons.book_outlined), selectedIcon: Icon(Icons.book), label: 'Daily Silak'),
-          NavigationDestination(icon: Icon(Icons.settings_outlined), selectedIcon: Icon(Icons.settings), label: 'Settings'),
+        destinations: [
+          const NavigationDestination(icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard), label: 'Dashboard'),
+          const NavigationDestination(icon: Icon(Icons.swap_horiz_outlined), selectedIcon: Icon(Icons.swap_horiz), label: 'Havala'),
+          const NavigationDestination(icon: Icon(Icons.book_outlined), selectedIcon: Icon(Icons.book), label: 'Daily Silak'),
+          if (kDebugMode) const NavigationDestination(icon: Icon(Icons.settings_outlined), selectedIcon: Icon(Icons.settings), label: 'Settings'),
         ],
       ),
     );

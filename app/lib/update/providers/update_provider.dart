@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/app_version_info.dart';
@@ -50,11 +51,16 @@ class UpdateDownloadState {
 class UpdateDownloadNotifier extends StateNotifier<UpdateDownloadState> {
   UpdateDownloadNotifier() : super(const UpdateDownloadState());
 
+  CancelToken? _cancelToken;
+
   Future<void> downloadAndInstall(String apkUrl) async {
+    final cancelToken = CancelToken();
+    _cancelToken = cancelToken;
     state = state.copyWith(status: UpdateDownloadStatus.downloading, progress: 0);
     try {
       final filePath = await UpdateService.instance.downloadApk(
         apkUrl,
+        cancelToken: cancelToken,
         onProgress: (progress) {
           state = state.copyWith(progress: progress);
         },
@@ -65,12 +71,27 @@ class UpdateDownloadNotifier extends StateNotifier<UpdateDownloadState> {
         progress: 1,
       );
       await UpdateService.instance.installApk(filePath);
+    } on DioException catch (e) {
+      if (e.type == DioExceptionType.cancel) {
+        state = const UpdateDownloadState();
+        return;
+      }
+      state = state.copyWith(
+        status: UpdateDownloadStatus.error,
+        errorMessage: e.toString(),
+      );
     } catch (e) {
       state = state.copyWith(
         status: UpdateDownloadStatus.error,
         errorMessage: e.toString(),
       );
+    } finally {
+      _cancelToken = null;
     }
+  }
+
+  void cancelDownload() {
+    _cancelToken?.cancel();
   }
 }
 

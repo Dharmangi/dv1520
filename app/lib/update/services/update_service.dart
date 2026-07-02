@@ -6,18 +6,17 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 
-import '../core/network/api_client.dart';
 import '../models/app_version_info.dart';
+import '../repositories/update_repository.dart';
 
 class UpdateService {
   UpdateService._();
 
   static final UpdateService instance = UpdateService._();
 
-  Future<AppVersionInfo> fetchLatestVersion() async {
-    final res = await ApiClient.instance.dio.get('/version');
-    return AppVersionInfo.fromJson(res.data as Map<String, dynamic>);
-  }
+  final UpdateRepository _repository = UpdateRepository();
+
+  Future<AppVersionInfo> fetchLatestVersion() => _repository.fetchLatestVersion();
 
   Future<String> currentVersion() async {
     final info = await PackageInfo.fromPlatform();
@@ -43,9 +42,11 @@ class UpdateService {
 
   /// Downloads the APK at [apkUrl] to the app cache dir, reporting progress
   /// in [0, 1] via [onProgress], then returns the local file path.
+  /// Pass [cancelToken] to allow the caller to cancel an in-flight download.
   Future<String> downloadApk(
     String apkUrl, {
     void Function(double progress)? onProgress,
+    CancelToken? cancelToken,
   }) async {
     final dir = await getTemporaryDirectory();
     final filePath = '${dir.path}/app-release.apk';
@@ -53,6 +54,7 @@ class UpdateService {
     await Dio().download(
       apkUrl,
       filePath,
+      cancelToken: cancelToken,
       onReceiveProgress: (received, total) {
         if (total > 0) onProgress?.call(received / total);
       },
