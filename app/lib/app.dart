@@ -11,14 +11,44 @@ import 'screens/settings/settings_screen.dart';
 import 'update/providers/update_provider.dart';
 import 'update/widgets/update_dialog.dart';
 
-class DV1520App extends ConsumerWidget {
+class DV1520App extends ConsumerStatefulWidget {
   const DV1520App({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<DV1520App> createState() => _DV1520AppState();
+}
+
+class _DV1520AppState extends ConsumerState<DV1520App> {
+  final _navigatorKey = GlobalKey<NavigatorState>();
+
+  @override
+  void initState() {
+    super.initState();
+    // Runs once at app startup regardless of login state, so a pending
+    // update is surfaced immediately even on the login screen.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _checkForUpdate());
+  }
+
+  Future<void> _checkForUpdate() async {
+    try {
+      final updateAvailable = await ref.read(updateAvailableProvider.future);
+      if (!updateAvailable) return;
+      final versionInfo = await ref.read(latestVersionProvider.future);
+      final context = _navigatorKey.currentContext;
+      if (context == null || !context.mounted) return;
+      await showUpdateDialog(context, versionInfo);
+    } catch (_) {
+      // Update check is best-effort; silently ignore network/server errors
+      // so a flaky connection never blocks app startup.
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final authState = ref.watch(authProvider);
 
     return MaterialApp(
+      navigatorKey: _navigatorKey,
       title: 'DV.1520',
       theme: AppTheme.light,
       themeMode: ThemeMode.light,
@@ -49,25 +79,6 @@ class RootShell extends ConsumerStatefulWidget {
 
 class _RootShellState extends ConsumerState<RootShell> {
   int _index = 0;
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _checkForUpdate());
-  }
-
-  Future<void> _checkForUpdate() async {
-    try {
-      final updateAvailable = await ref.read(updateAvailableProvider.future);
-      if (!updateAvailable || !mounted) return;
-      final versionInfo = await ref.read(latestVersionProvider.future);
-      if (!mounted) return;
-      await showUpdateDialog(context, versionInfo);
-    } catch (_) {
-      // Update check is best-effort; silently ignore network/server errors
-      // so a flaky connection never blocks app startup.
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
