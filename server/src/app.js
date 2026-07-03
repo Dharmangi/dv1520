@@ -3,6 +3,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const requireApiKey = require('./middleware/auth');
+const authRoutes = require('./routes/auth');
 const versionRoutes = require('./routes/version');
 const internalRoutes = require('./routes/internal');
 const peopleRoutes = require('./routes/people');
@@ -33,6 +34,7 @@ app.use('/api/version', versionRoutes);
 app.use('/internal', internalRoutes);
 
 app.use(requireApiKey);
+app.use('/api/auth', authRoutes);
 app.use('/api/people', peopleRoutes);
 app.use('/api/transactions', transactionsRoutes);
 app.use('/api/dashboard', dashboardRoutes);
