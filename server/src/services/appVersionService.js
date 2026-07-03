@@ -9,6 +9,7 @@ function envFallback() {
   const repo = process.env.GITHUB_REPO || 'Dharmangi/dv1520';
   return {
     version,
+    buildNumber: Number(process.env.APP_LATEST_BUILD_NUMBER) || 1,
     apkUrl:
       process.env.APP_APK_URL ||
       `https://github.com/${repo}/releases/download/v${version}/app-release.apk`,
@@ -24,6 +25,7 @@ exports.getLatestVersion = async () => {
   if (doc) {
     return {
       version: doc.version,
+      buildNumber: doc.buildNumber,
       apkUrl: doc.apkUrl,
       forceUpdate: doc.forceUpdate,
       releaseNotes: doc.releaseNotes,
@@ -32,11 +34,12 @@ exports.getLatestVersion = async () => {
   return envFallback();
 };
 
-exports.upsertLatestVersion = async ({ version, apkUrl, forceUpdate, releaseNotes }) => {
+exports.upsertLatestVersion = async ({ version, buildNumber, apkUrl, forceUpdate, releaseNotes }) => {
   const doc = await AppVersion.findByIdAndUpdate(
     SINGLETON_ID,
     {
       version,
+      buildNumber,
       apkUrl,
       forceUpdate: forceUpdate ?? false,
       releaseNotes: releaseNotes ?? '',

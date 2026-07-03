@@ -40,18 +40,23 @@ jobs:
         uses: actions/checkout@v4
 
       # ------------------------------------------------------------------
-      # 2. Read the app version from pubspec.yaml (e.g. "1.0.0+1" -> "v1.0.0")
-      #    This becomes the release tag, per project requirement — NOT the
-      #    GitHub run number.
+      # 2. Read the display version (e.g. "1.0.0") from pubspec.yaml, but
+      #    always derive the build number from this workflow run instead of
+      #    trusting whatever is committed — this is what actually drives the
+      #    in-app update check, so it must increase on every single push
+      #    without anyone needing to hand-edit pubspec.yaml each time.
+      #    github.run_number increases by 1 on every workflow run in this
+      #    repo, so it's already a strictly-increasing build number.
       # ------------------------------------------------------------------
       - name: Extract version from pubspec.yaml
         id: version
         run: |
           FULL_VERSION=$(grep '^version:' pubspec.yaml | sed 's/version:\s*//')
           VERSION_NAME=$(echo "$FULL_VERSION" | cut -d'+' -f1)
-          BUILD_NUMBER=$(echo "$FULL_VERSION" | cut -d'+' -f2)
-          TAG="v${VERSION_NAME}"
-          echo "Detected pubspec version: $FULL_VERSION"
+          BUILD_NUMBER="${{ github.run_number }}"
+          TAG="v${VERSION_NAME}-${BUILD_NUMBER}"
+          echo "Detected pubspec version name: $VERSION_NAME"
+          echo "Auto-assigned build number: $BUILD_NUMBER"
           echo "Release tag: $TAG"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "version_name=$VERSION_NAME" >> "$GITHUB_OUTPUT"
@@ -220,10 +225,11 @@ jobs:
 
           jq -n \
             --arg version "${{ steps.version.outputs.version_name }}" \
+            --argjson buildNumber "${{ steps.version.outputs.build_number }}" \
             --arg apkUrl "$APK_URL" \
             --argjson forceUpdate "$FORCE_UPDATE" \
             --arg releaseNotes "$RELEASE_NOTES" \
-            '{version: $version, apkUrl: $apkUrl, forceUpdate: $forceUpdate, releaseNotes: $releaseNotes}' \
+            '{version: $version, buildNumber: $buildNumber, apkUrl: $apkUrl, forceUpdate: $forceUpdate, releaseNotes: $releaseNotes}' \
             > /tmp/update-version-payload.json
 
           http_status=$(curl -s -o /tmp/update-version-response.json -w "%{http_code}" \

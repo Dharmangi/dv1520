@@ -4,10 +4,13 @@ const appVersionService = require('../services/appVersionService');
 // new GitHub Release is published, so the backend's /api/version reflects
 // the new release with no manual step.
 exports.postUpdateVersion = async (req, res) => {
-  const { version, apkUrl, forceUpdate, releaseNotes } = req.body || {};
+  const { version, buildNumber, apkUrl, forceUpdate, releaseNotes } = req.body || {};
 
   if (!version || typeof version !== 'string') {
     return res.status(400).json({ error: 'version is required and must be a string' });
+  }
+  if (!Number.isInteger(buildNumber) || buildNumber < 1) {
+    return res.status(400).json({ error: 'buildNumber is required and must be a positive integer' });
   }
   if (!apkUrl || typeof apkUrl !== 'string') {
     return res.status(400).json({ error: 'apkUrl is required and must be a string' });
@@ -21,6 +24,7 @@ exports.postUpdateVersion = async (req, res) => {
 
   const doc = await appVersionService.upsertLatestVersion({
     version,
+    buildNumber,
     apkUrl,
     forceUpdate,
     releaseNotes,

@@ -13,8 +13,8 @@ final latestVersionProvider = FutureProvider.autoDispose<AppVersionInfo>((ref) a
 /// [latestVersionProvider] and found to be out of date.
 final updateAvailableProvider = FutureProvider.autoDispose<bool>((ref) async {
   final latest = await ref.watch(latestVersionProvider.future);
-  final current = await UpdateService.instance.currentVersion();
-  return UpdateService.instance.isNewerVersion(current, latest.version);
+  final current = await UpdateService.instance.currentBuildNumber();
+  return UpdateService.instance.isNewerVersion(current, latest.buildNumber);
 });
 
 enum UpdateDownloadStatus { idle, downloading, readyToInstall, error }

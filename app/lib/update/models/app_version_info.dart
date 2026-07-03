@@ -1,12 +1,14 @@
 class AppVersionInfo {
   AppVersionInfo({
     required this.version,
+    required this.buildNumber,
     required this.apkUrl,
     required this.forceUpdate,
     required this.releaseNotes,
   });
 
   final String version;
+  final int buildNumber;
   final String apkUrl;
   final bool forceUpdate;
   final String releaseNotes;
@@ -24,6 +26,7 @@ class AppVersionInfo {
 
   factory AppVersionInfo.fromJson(Map<String, dynamic> json) => AppVersionInfo(
         version: json['version'] as String,
+        buildNumber: json['buildNumber'] as int? ?? 0,
         apkUrl: json['apkUrl'] as String,
         forceUpdate: json['forceUpdate'] as bool? ?? false,
         releaseNotes: json['releaseNotes'] as String? ?? '',

@@ -18,26 +18,16 @@ class UpdateService {
 
   Future<AppVersionInfo> fetchLatestVersion() => _repository.fetchLatestVersion();
 
-  Future<String> currentVersion() async {
+  Future<int> currentBuildNumber() async {
     final info = await PackageInfo.fromPlatform();
-    return info.version;
+    return int.parse(info.buildNumber);
   }
 
-  /// Returns true if [remoteVersion] is newer than [currentVersion].
-  /// Compares dotted numeric segments (e.g. "1.2.10" > "1.2.9"), padding
-  /// missing segments with 0 so "1.2" and "1.2.0" are treated as equal.
-  bool isNewerVersion(String currentVersion, String remoteVersion) {
-    final current = currentVersion.split('.').map(int.parse).toList();
-    final remote = remoteVersion.split('.').map(int.parse).toList();
-    final length = current.length > remote.length ? current.length : remote.length;
-
-    for (var i = 0; i < length; i++) {
-      final c = i < current.length ? current[i] : 0;
-      final r = i < remote.length ? remote[i] : 0;
-      if (r > c) return true;
-      if (r < c) return false;
-    }
-    return false;
+  /// Build numbers are a strictly increasing integer stamped by CI on every
+  /// release, so comparison is just an integer check — no version-string
+  /// parsing ambiguity, and it's what actually drives the update prompt.
+  bool isNewerVersion(int currentBuildNumber, int remoteBuildNumber) {
+    return remoteBuildNumber > currentBuildNumber;
   }
 
   /// Downloads the APK at [apkUrl] to the app cache dir, reporting progress
